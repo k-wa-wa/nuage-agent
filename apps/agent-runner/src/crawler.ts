@@ -179,14 +179,14 @@ export class PipelineCrawler {
 
     const runnerArgs = [
       ...flags,
-      isClaude ? '-p' : '',
-      `"${prompt.replace(/"/g, '\\"')}"`
+      isClaude ? '-p' : ''
     ].filter(arg => arg !== '');
 
     const result = await runCommand({
       cmd,
       args: runnerArgs,
-      cwd: workspacePath
+      cwd: workspacePath,
+      stdin: prompt
     });
 
     logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');

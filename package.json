@@ -9,7 +9,7 @@
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
     "sandbox:setup": "bash scripts/setup-sandbox.sh",
-    "sandbox:run": "bash scripts/run-sandbox.sh"
+    "sandbox:run": "pnpm build && pnpm dev:runner --once -- --repo-map-dir ./repo-map/sandbox"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
