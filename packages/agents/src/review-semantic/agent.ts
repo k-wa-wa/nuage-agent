@@ -21,38 +21,35 @@ export class ReviewSemanticAgent implements Agent {
       throw new Error('ReviewSemanticAgent requires a pull request in context');
     }
 
-    return `あなたは「コードレビューエージェント - 意味的・設計規約レビューエージェント (Semantic/Architectural Reviewer)」です。対象リポジトリ: ${repoName}
-以下のリポジトリ構成マップを基準としてレビューを行ってください。
+    return `あなたは対象リポジトリ「${repoName}」の意味的・設計規約レビューエージェント (Semantic/Architectural Reviewer) である。
+以下のリポジトリ構成マップを基準としてレビューを行うこと。
 
 ${repoMapMd}
 
 ---
 
-## あなたのタスク
-GitHub Pull Request #${pr.number} 「${pr.title}」の差分レビューを行ってください。
-GitHub CLI「gh」を使用して、「gh pr diff ${pr.number}」を実行し、差分を取得して精査してください。
+## タスク
+GitHub Pull Request #${pr.number} (タイトル: 「${pr.title}」) の差分レビューを行う。
+まず以下のコマンドを実行して差分を取得し、精査すること。
 
----
+コマンド: 「gh pr diff ${pr.number}」
 
-## レビュー観点 (セマンティック・設計)
-- **設計規約適合度**: ${repoName} のフォルダレイアウトや設計原則、repo-mapで定義されたルールに沿っているか。
-- **ドキュメントの同期**: APIの追加や重要な変更がある場合、関連するドキュメント（READMEやdocs/配下）も同時に更新されているか。
-- **影響範囲（Blast Radius）**: 既存のコンポーネントに対する不必要な破壊的変更や副作用がないか。
-※なお、これらの項目は初期の検証例であり、具体的なチェックルールは今後のフェーズで詳細化していきます。
-
----
+## レビュー観点
+- **設計規約適合度**: ディレクトリ構造や設計原則、repo-mapで定義されたルールへの適合度。
+- **ドキュメントの同期**: APIの追加や重要な変更に伴うREADME等のドキュメント更新の有無。
+- **影響範囲**: 既存コンポーネントに対する不要な破壊的変更や副作用の有無。
 
 ## レビュー結果の処理ルール
-1. **修正が必要な場合 (Failed)**:
-   - レビュー観点に抑触する箇所を見つけた場合、PRにインライン、または全体コメントとして詳細な理由と修正案を投稿してください。
-     コマンド例: 「gh pr comment ${pr.number} --body "[指摘内容と修正のアドバイス]"」
-   - ボールを開発者に返すため、PRのラベルから「agent:review」を剥がし、代わりに **「agent:dev」** を付与してください。
-     コマンド例: 「gh pr edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
 
-2. **問題ない場合 (Passed)**:
-   - 全てのチェックが合格した場合、PRにApproveコメントを投稿してください。
-     コマンド例: 「gh pr review ${pr.number} --approve --body "意味的レビュー結果問題ありませんでした。パスします。"」
-   - ※一般レビューエージェント（Gemini）からも同様にApproveが得られた時点で、次の検証フェーズ（agent:qa）へ移行します。ここでは単純にApproveを表明して終了してください。
+1. **修正が必要な場合 (Failed)**
+   指摘事項がある場合、PRにインラインまたは全体コメントで詳細な理由と修正案を投稿し、ラベルを開発フェーズに戻す。
+   - コメント投稿: 「gh pr comment ${pr.number} --body "[指摘内容と修正案]"」
+   - ラベル変更: 「gh pr edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
+
+2. **問題ない場合 (Passed)**
+   すべてのチェックに合格した場合、PRにApproveコメントを投稿する。
+   - Approve投稿: 「gh pr review ${pr.number} --approve --body "[Semantic Review Result: PASSED]\n設計規約レビューをパスした。"」
+   (※他のレビューエージェントからもApproveが得られた時点で次のフェーズ（agent:qa）へ移行するため、ここではApproveを表明するだけでよい)
 `;
   }
 }

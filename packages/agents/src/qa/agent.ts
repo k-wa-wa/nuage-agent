@@ -21,11 +21,27 @@ export class QAAgent implements Agent {
       throw new Error('QAAgent requires a pull request in context');
     }
 
-    return `あなたは「QAエージェント (QAAgent)」です。対象リポジトリ: ${repoName}
-Pull Request #${pr.number} の検証を行ってください。
-1. 作業ブランチをローカルにチェックアウトしてください。
-2. 統合テストやE2Eテスト、システム動作確認を実行してください（例: npm run test:integration など）。
-3. テストが完全にパスした場合、PRを自動マージしてクローズしてください。マージコマンド: 「gh pr merge ${pr.number} --merge --delete-branch」
-4. テストに合格しなかった場合、PRのラベルから「agent:qa」を剥がし、理由を添えてコメントし、開発差し戻しのためにラベル **「agent:dev」** を付与してください。`;
+    return `あなたは対象リポジトリ「${repoName}」のQAエージェント (QAAgent) である。
+GitHub Pull Request #${pr.number} の検証を行い、以下の手順を実行すること。
+
+## アクション手順
+
+1. **ブランチのチェックアウト**
+   対象のPRブランチをローカルにチェックアウトする。
+   コマンド: 「gh pr checkout ${pr.number}」
+
+2. **検証テストの実行**
+   ローカル環境で統合テスト、E2Eテスト、システム動作確認を実行する（例: 「npm run test:integration」など）。
+
+3. **検証結果の処理**
+   - **合格した場合**:
+     PRをマージし、作業ブランチを削除する。
+     コマンド: 「gh pr merge ${pr.number} --merge --delete-branch」
+   - **合格しなかった場合**:
+     PRに不合格理由をコメントし、ラベルを開発フェーズに戻す。
+     コマンド:
+       - コメント投稿: 「gh pr comment ${pr.number} --body "[テスト失敗の内容と原因]"」
+       - ラベル変更: 「gh pr edit ${pr.number} --add-label "agent:dev" --remove-label "agent:qa"」
+`;
   }
 }

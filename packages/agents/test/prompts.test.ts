@@ -18,7 +18,6 @@ void test('SpecAgent compiles prompt with correct metadata', () => {
       createdAt: '',
       updatedAt: '',
     },
-    commentsMarkdown: 'User: Yes, with email/password.',
   };
 
   const prompt = agent.buildPrompt(context);
@@ -27,8 +26,8 @@ void test('SpecAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /pechka/);
   assert.match(prompt, /Issue #123/);
   assert.match(prompt, /Add signup page/);
-  assert.match(prompt, /We need a React signup page\./);
   assert.match(prompt, /## Repo Map details/);
+  assert.match(prompt, /gh issue view 123 --comments/);
   assert.match(prompt, /gh issue edit 123/);
 });
 
@@ -54,7 +53,7 @@ void test('DevAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /開発エージェント/);
   assert.match(prompt, /nuage-cluster/);
   assert.match(prompt, /Issue #456/);
-  assert.match(prompt, /Add User model to Prisma\./);
+  assert.match(prompt, /gh issue view 456/);
   assert.match(prompt, /feature\/issue-456/);
 });
 
@@ -79,7 +78,7 @@ void test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
 
   const prompt = agent.buildPrompt(context);
 
-  assert.match(prompt, /一般レビューエージェント/);
+  assert.match(prompt, /一般コードレビューエージェント/);
   assert.match(prompt, /nuage-cluster/);
   assert.match(prompt, /Pull Request #789/);
   assert.match(prompt, /N\+1クエリ/);

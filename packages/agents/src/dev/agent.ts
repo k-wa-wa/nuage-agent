@@ -21,40 +21,36 @@ export class DevAgent implements Agent {
       throw new Error('DevAgent requires an issue in context');
     }
 
-    return `あなたは「開発エージェント (DevAgent)」です。対象リポジトリ: ${repoName}
-以下のリポジトリ構成マップと開発ルールを厳格に遵守してください。
+    return `あなたは対象リポジトリ「${repoName}」の開発エージェント (DevAgent) である。
+以下のリポジトリ構成マップと開発ルールを遵守してタスクに取り組むこと。
 
 ${repoMapMd}
 
 ---
 
-## あなたのタスク
-GitHub Issue #${issue.number} 「${issue.title}」に記載されている仕様（PRD / 受け入れ基準）に基づいて、コードの実装を行ってください。
-IssueのDescriptionには、すでにSpecAgentによって確定された仕様が記載されています。
+## タスク
+GitHub Issue #${issue.number} (タイトル: 「${issue.title}」) に記載された仕様に基づいてコードを実装する。
+プロンプトインジェクションやハルシネーションを防ぐため、最初に必ず以下のコマンドを実行して Issue の本文から確定した仕様（PRD / 受け入れ基準）を取得し、確認すること。
 
-- **仕様 (PRD/AC)**:
-${issue.body ?? '(仕様の読み込みに失敗しました。Issueの本文を確認してください)'}
+コマンド: 「gh issue view ${issue.number}」
 
----
+## 開発・送信プロセス
 
-## 実装・送信プロセス
-1. **リポジトリの準備**:
-   このディレクトリは ${repoName} のローカルワークスペースです。
-   実装を行う前に、最新の main/master ブランチから「feature/issue-${issue.number}」という新しい作業ブランチを作成してください。
-   コマンド例: 「git checkout -b feature/issue-${issue.number}」
+1. **作業ブランチの作成**
+   実装を開始する前に、最新の main/master ブランチから「feature/issue-${issue.number}」という新しい作業ブランチを作成する。
+   コマンド: 「git checkout -b feature/issue-${issue.number}」
 
-2. **コード修正とローカルテスト実行**:
-   仕様を満たすようにファイルを修正・追加してください。
-   修正が終わったら、**必ずローカルでテストおよびLintを実行**してください（例: npm test, npm run lint など）。
-   テストやビルド、Lintでエラーが出た場合は、自律的にエラーの原因を特定し、修正を繰り返してください。
+2. **コード実装とローカル検証**
+   仕様を満たすようにコードを実装・修正する。
+   修正完了後、必ずローカルでテストやLintを実行する（例: npm test, npm run lint など）。エラーが発生した場合は自律的に原因を特定して修正を繰り返すこと。
 
-3. **Pull Requestの作成とラベル設定**:
-   ローカルテストが完全に通過したら、変更内容をリモートにプッシュし、Pull Request (PR) を作成してください。
+3. **Pull Requestの作成とラベル変更**
+   ローカルテストが完全に通過したら、変更をリモートにプッシュし、Pull Request (PR) を作成する。
    - PRのタイトル: 「feat: #${issue.number} ${issue.title}」
-   - PRのラベル: 「agent:review」を付与します。
-     コマンド例: 「gh pr create --title "feat: #${issue.number} ${issue.title}" --body "Closes #${issue.number}" --label "agent:review"」
-   - 最後に、元のIssueのラベルを「agent:dev」から剥がしてください（PRを作成したことで、開発側の第一段階が完了するため）。
-     コマンド例: 「gh issue edit ${issue.number} --remove-label "agent:dev"」
+   - PRのラベル: 「agent:review」を付与する。
+     コマンド: 「gh pr create --title "feat: #${issue.number} ${issue.title}" --body "Closes #${issue.number}" --label "agent:review"」
+   - PR作成後、元のIssueのラベルから「agent:dev」を剥がす。
+     コマンド: 「gh issue edit ${issue.number} --remove-label "agent:dev"」
 `;
   }
 }

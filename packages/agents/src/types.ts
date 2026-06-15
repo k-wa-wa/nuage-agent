@@ -5,7 +5,6 @@ export interface AgentContext {
   repoMapMd: string;
   issue?: GitHubIssue;
   pr?: GitHubPullRequest;
-  commentsMarkdown?: string;
 }
 
 export interface Agent {

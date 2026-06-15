@@ -118,19 +118,10 @@ export class PipelineCrawler {
         const workspacePath = ensureWorkspace(repo, this.config);
         const repoMapMd = this.getRepoMapMd(repo);
 
-        let commentsMarkdown = '';
-        if (agent.id === 'spec') {
-          const comments = await getIssueComments(repo, issue.number);
-          commentsMarkdown = comments
-            .map((c) => `[${c.user} - ${c.createdAt}]: ${c.body}`)
-            .join('\n\n');
-        }
-
         const context: AgentContext = {
           repoName: repo,
           repoMapMd,
           issue,
-          commentsMarkdown,
         };
 
         const prompt = agent.buildPrompt(context);
