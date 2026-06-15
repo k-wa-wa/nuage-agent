@@ -9,7 +9,7 @@
     "test": "pnpm -r test",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
     "sandbox:setup": "bash scripts/setup-sandbox.sh",
-    "sandbox:run": "pnpm build && pnpm dev:runner --once -- --repo-map-dir ./repo-map/sandbox",
+    "sandbox:run": "pnpm build && pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox",
     "labels:create": "pnpm --filter agent-runner labels:create"
   },
   "devDependencies": {

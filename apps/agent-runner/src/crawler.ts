@@ -11,7 +11,8 @@ import {
   getIssueComments, 
   updateIssueLabels,
   getPullRequestsWithLabel,
-  updatePullRequestLabels
+  updatePullRequestLabels,
+  getViewerLogin
 } from './github-client.js';
 import { ensureWorkspace } from './workspace.js';
 
@@ -60,6 +61,9 @@ export class PipelineCrawler {
       for (const repo of this.config.repositories) {
         logger.info(`Checking repository: ${repo}`, 'crawler');
         
+        // Resolve 'agent:wait' locks if there are new user comments
+        await this.handleWaitingIssues(repo);
+
         // Loop through each registered agent in the interface list
         for (const agent of agentsList) {
           logger.debug(`Running check for Agent: ${agent.id} (label: ${agent.label})`, 'crawler');
@@ -91,6 +95,7 @@ export class PipelineCrawler {
 
     for (const issue of issues) {
       if (issue.labels.includes('agent:running')) continue;
+      if (issue.labels.includes('agent:wait')) continue;
 
       logger.info(`Found Issue #${issue.number} for Agent ${agent.id}: "${issue.title}"`, 'crawler');
 
@@ -101,12 +106,11 @@ export class PipelineCrawler {
         const workspacePath = ensureWorkspace(repo, this.config);
         const repoMapMd = this.getRepoMapMd(repo);
 
-        // SpecAgent needs issue comments context
         let commentsMarkdown = '';
         if (agent.id === 'spec') {
           const comments = await getIssueComments(repo, issue.number);
           commentsMarkdown = comments
-            .map(c => `[${c.user} - ${c.createdAt}]: ${c.body}`)
+            .map((c: any) => `[${c.user} - ${c.createdAt}]: ${c.body}`)
             .join('\n\n');
         }
 
@@ -203,9 +207,42 @@ export class PipelineCrawler {
     for (const pr of prs) {
       if (pr.labels.includes('agent:running')) continue;
 
-      // Elevate the PR to agent:qa.
-      logger.info(`PR #${pr.number} has passed all review agents. Elevating to QA.`, 'crawler');
-      await updatePullRequestLabels(repo, pr.number, ['agent:qa'], ['agent:review']);
+      // Query PR review comments / statuses
+      // For now, check if reviewers left approval comments (meaning no further actions)
+      const comments = await getIssueComments(repo, pr.number);
+      const botUser = await getViewerLogin();
+
+      // Check if both general and semantic reviewers approved
+      const hasGeneralPassed = comments.some(c => c.user === botUser && c.body.includes('[General Review Result: PASSED]'));
+      const hasSemanticPassed = comments.some(c => c.user === botUser && c.body.includes('[Semantic Review Result: PASSED]'));
+
+      if (hasGeneralPassed && hasSemanticPassed) {
+        logger.info(`PR #${pr.number} passed all review checks. Elevating to QA phase.`, 'crawler');
+        await updatePullRequestLabels(repo, pr.number, ['agent:qa'], ['agent:review']);
+      }
+    }
+  }
+
+  /**
+   * @what 'agent:wait' (保留中) ラベルが付いているIssueにおいて、新着コメントが自分以外のユーザー（または別Bot）から投稿されたかを検知し、ラベルを自動解除します。
+   * @why ユーザーがコメントで返答した際に、手動でラベルを剥がす手間を省き、自動的にエージェント実行サイクルを再開させるため。
+   */
+  private async handleWaitingIssues(repo: string): Promise<void> {
+    const waitingIssues = await getIssuesWithLabel(repo, 'agent:wait');
+    if (waitingIssues.length === 0) return;
+
+    const currentBotUser = await getViewerLogin();
+
+    for (const issue of waitingIssues) {
+      const comments = await getIssueComments(repo, issue.number);
+      if (comments.length > 0) {
+        const latestComment = comments[comments.length - 1];
+        // If someone else (user or another bot) commented, remove the wait label to resume pipeline
+        if (latestComment.user !== currentBotUser) {
+          logger.info(`Detected new comment from user/other-bot on Issue #${issue.number}. Removing 'agent:wait' label.`, 'crawler');
+          await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
+        }
+      }
     }
   }
 }

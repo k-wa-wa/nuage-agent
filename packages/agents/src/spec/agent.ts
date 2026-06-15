@@ -35,16 +35,20 @@ ${commentsMarkdown || '(コメントなし)'}
 
 ## 振る舞いのルール
 1. **仕様の明確化（壁打ちループ）**:
-   まだ要件が曖昧であったり、追加で確認したい事項（対象画面、データの持ち方、例外パターンなど）がある場合は、「gh issue comment ${issue.number} --body \"[仕様確認のための質問]...\"」を実行して、ユーザーに質問を投げてください。質問は要点を突いた簡潔な箇条書きにしてください。
+   まだ要件が曖昧であったり、追加で確認したい事項がある場合は、以下の両方のコマンドを実行してユーザーに質問を投げ、回答を待ってください：
+   - 質問コメント: 「gh issue comment ${issue.number} --body \"[仕様確認のための質問]... \n\n(※内容を確認のうえ、コメントをご返信いただくか、または \`agent:wait\` ラベルを剥がしてください。)\"」
+   - 保留ラベル付与: 「gh issue edit ${issue.number} --add-label \"agent:wait\"」
 
 2. **PRD & 受け入れ基準 (AC) のドラフト提示**:
-   必要な要件が揃ったら、仕様書（PRD）と受け入れ基準（Acceptance Criteria）のドラフトをMarkdown形式で作成し、「gh issue comment ${issue.number} --body \"[PRDドラフト]...\"」を実行してユーザーに承認を求めてください。
+   必要な要件が揃ったら、仕様書（PRD）と受け入れ基準（Acceptance Criteria）のドラフトをMarkdown形式で作成し、以下の両方のコマンドを実行してユーザーに承認を求めてください：
+   - ドラフト提示コメント: 「gh issue comment ${issue.number} --body \"[PRDドラフト]... \n\n(※内容に問題がなければ『Approve』や『OK』とご返信いただくか、または \`agent:wait\` ラベルを剥がしてください。)\"」
+   - 保留ラベル付与: 「gh issue edit ${issue.number} --add-label \"agent:wait\"」
 
 3. **承認の検知と引き渡し**:
-   コメント履歴の中で、ユーザーが「Approve」「OK」「問題ない」「進めて」などの承認を明示している場合、以下のステップを実行して仕様定義フェーズを完了させてください。
+   コメント履歴の中で、ユーザーが「Approve」「OK」「問題ない」「進めて」などの承認を明示している場合、または \`agent:wait\` ラベルが剥がされている場合は、以下のステップを実行して仕様定義フェーズを完了させてください。
    - 最終的な仕様（PRDとAC）を、Issueの本文（Description）に上書き更新します。「gh issue edit ${issue.number} --body \"[最終決定したPRD/ACの内容]\"」
-   - Issue of 担当ラベルを「agent:dev」に変更し、「agent:spec」を剥がします。
-     コマンド: 「gh issue edit ${issue.number} --add-label \"agent:dev\" --remove-label \"agent:spec\"」
+   - Issueの担当ラベルを「agent:dev」に変更し、「agent:spec」および「agent:wait」を剥がします。
+     コマンド: 「gh issue edit ${issue.number} --add-label \"agent:dev\" --remove-label \"agent:spec\" --remove-label \"agent:wait\"」
    - 完了した旨をコメントします。
      コマンド: 「gh issue comment ${issue.number} --body \"仕様が承認されました。これより開発エージェント（agent:dev）へタスクを引き渡します。\"」
 `;

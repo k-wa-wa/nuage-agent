@@ -124,9 +124,15 @@ const PIPELINE_LABELS = [
   { name: 'agent:review', color: '0e8a16', description: 'Review phase' },
   { name: 'agent:qa', color: 'b60205', description: 'QA phase' },
   { name: 'agent:triage', color: 'd93f0b', description: 'Triage phase' },
-  { name: 'agent:running', color: '5319e7', description: 'Currently running' }
+  { name: 'agent:running', color: '5319e7', description: 'Currently running' },
+  { name: 'agent:wait', color: '6f42c1', description: 'Waiting for user input/action' },
 ];
 
+/**
+ * @what パイプラインの各フェーズに用いる GitHub ラベルを一括作成・更新（冪等）します。
+ * @why ランナーの起動前に確実に状態ラベルが存在することを保証し、手動で GitHub 上にラベルを作成する手間を省くため。
+ *      権限エラーを防ぐためにランナー本体の起動処理からは切り離し、独立したCLIコマンドから実行するようにしました。
+ */
 export async function ensureLabelsExist(repo: string): Promise<void> {
   logger.info(`Checking and ensuring pipeline labels exist for repository: ${repo}`, 'github-client');
   for (const label of PIPELINE_LABELS) {
@@ -138,4 +144,19 @@ export async function ensureLabelsExist(repo: string): Promise<void> {
     }
   }
 }
+
+/**
+ * @what GitHub CLI (gh) の現在のアクティブなログインユーザー名を取得します。
+ * @why 自身のBot発言とユーザーの発言を区別し、回答待ちスロットリング状態（agent:wait）を自動解除するために現在のBotのユーザー名を特定する必要があるため。
+ */
+export async function getViewerLogin(): Promise<string> {
+  try {
+    const output = await execCommand('gh api user --jq .login');
+    return output.trim();
+  } catch (error) {
+    logger.error('Failed to get current gh user login', 'github-client', error);
+    return '';
+  }
+}
+
 
