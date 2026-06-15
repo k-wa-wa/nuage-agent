@@ -1,5 +1,9 @@
 import { Agent, AgentContext } from '../types.js';
 
+/**
+ * @what 開発フェーズのエージェント（DevAgent）としての指示プロンプトを構築します。
+ * @why 確定した仕様（Issue本文）に基づき、ローカルブランチ作成、ファイルの実装、コンパイル・テスト確認、そして GitHub 上にPRを作成（レビュー依頼）する一連の自律開発フローを指示するため。
+ */
 export class DevAgent implements Agent {
   readonly id = 'dev';
   readonly targetType = 'issue';

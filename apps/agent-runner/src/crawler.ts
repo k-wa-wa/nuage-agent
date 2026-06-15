@@ -30,7 +30,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Reads the repository map markdown file directly from the repo-map directory.
+   * @what repo-map ディレクトリから対象リポジトリ用の Markdown マップファイルを直接同期的に読み込みます。
+   * @why エージェント（Claude Code 等）がコードを修正する前に、対象 codebase の全体ディレクトリ構成や規約、コンパイルルールなどをコンテキストに結合して賢く判断させるため。
    */
   private getRepoMapMd(repo: string): string {
     const repoFolder = repo.split('/').pop() || repo;
@@ -46,7 +47,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Performs one full crawl cycle across all repositories.
+   * @what 監視対象リポジトリ群に対して、Issue/PRの定期的な状態チェック巡回（1サイクル）を実行します。
+   * @why 定期的に GitHub の更新をポーリングし、新しい `agent:*` ラベルをトリガーにして適切な自律エージェントを連続して呼び出すため。
    */
   public async crawlCycle(): Promise<void> {
     if (this.isRunning) {
@@ -88,7 +90,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Process an agent targeting Issues (SpecAgent, DevAgent)
+   * @what Issue をターゲットとするエージェント（仕様定義・開発）のチェックおよび実行プロセスをハンドリングします。
+   * @why `agent:spec` や `agent:dev` ラベルがついた未ロックの課題に対して、リポジトリマップ情報と過去のコメント履歴をプロンプトに組み立て、CLIを起動してタスクを解決するため。
    */
   private async processIssueAgent(repo: string, agent: Agent): Promise<void> {
     const issues = await getIssuesWithLabel(repo, agent.label);
@@ -135,7 +138,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Process an agent targeting PRs (ReviewAgents, QAAgent)
+   * @what プルリクエストをターゲットとするエージェント（レビュー、QA）のチェックおよび実行プロセスをハンドリングします。
+   * @why 作成されたPRブランチに紐づくコード差分やテスト結果に基づき、レビュー指摘コメントの投稿やQAテストの自動実行を安全なワークスペース上で行うため。
    */
   private async processPRAgent(repo: string, agent: Agent): Promise<void> {
     const prs = await getPullRequestsWithLabel(repo, agent.label);
@@ -172,7 +176,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Helper to invoke the correct LLM CLI
+   * @what 指定されたエージェントの指示プロンプトを標準入力（stdin）経由で LLM CLI（Claude/Gemini）に流し込み、実行を開始します。
+   * @why 複数行に及ぶプロンプトを引数のシェルエスケープ問題を完全に回避しつつ安全に引き渡し、さらに進捗出力をリアルタイムでユーザーのコンソールにストリームするため。
    */
   private async executeAgentCLI(agent: Agent, prompt: string, workspacePath: string): Promise<void> {
     const isClaude = agent.commandType === 'claude';
@@ -197,9 +202,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * Post-review validation: If the PR still has the agent:review label, and both reviewers
-   * have approved the PR (meaning neither reviewer downgraded it back to agent:dev),
-   * we elevate it to agent:qa.
+   * @what 2つのコードレビューエージェント（一般および意味的チェック）によるレビュー合格結果を確認し、状態をQAへと昇格させます。
+   * @why それぞれ非同期で完了するレビューエージェントの出力を統合監視し、双方とも `PASSED` を報告した場合のみ自動的に次の `agent:qa` ラベルへ安全に移行させるため。
    */
   private async postReviewCheck(repo: string): Promise<void> {
     const prs = await getPullRequestsWithLabel(repo, 'agent:review');

@@ -1,5 +1,9 @@
 import { Agent, AgentContext } from '../types.js';
 
+/**
+ * @what マージ前の最終検証を行うQAエージェント（QAAgent）としての指示プロンプトを構築します。
+ * @why 対象PRブランチをローカルに取得して統合・E2Eテストを実行し、テスト通過時にマージとブランチ削除を行い、失敗時には開発へ差し戻すフローを指示するため。
+ */
 export class QAAgent implements Agent {
   readonly id = 'qa';
   readonly targetType = 'pr';

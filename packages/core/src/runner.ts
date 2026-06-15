@@ -16,7 +16,8 @@ export interface RunCommandResult {
 }
 
 /**
- * Runs a command in a child process and returns the results.
+ * @what 指定されたコマンドを子プロセスとして実行し、標準出力・標準エラー出力・終了コードを取得します。
+ * @why 各種エージェント（Claude Code 等）や git/gh CLI コマンドを、ディレクトリや環境変数を適切に指定した状態で、非同期かつストリーミング処理で安全に実行するため。
  */
 export function runCommand(options: RunCommandOptions): Promise<RunCommandResult> {
   const { cmd, args, cwd, env, stdin } = options;

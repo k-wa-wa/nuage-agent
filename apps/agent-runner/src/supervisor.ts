@@ -30,7 +30,8 @@ export class PipelineSupervisor {
   }
 
   /**
-   * Run the supervisor checks to clean up and triage issues/PRs.
+   * @what 監視デーモンの起動時にバックグラウンドで実行され、タイムアウトしたタスクや未分類Issueの修復・トリアージを一括実行します。
+   * @why 実行時エラーやCLIフリーズによってフリーズしたプロセスを自動回復させ、開発のスタックを完全に防止するため。
    */
   public async runSupervisorChecks(): Promise<void> {
     logger.info('Starting Supervisor checks...', 'supervisor');
@@ -54,6 +55,10 @@ export class PipelineSupervisor {
     logger.info('Supervisor checks completed.', 'supervisor');
   }
 
+  /**
+   * @what 'agent:running' ラベルがついた状態のまま、更新がなく15分以上経過したフリーズ状態のIssueを検知してロックを解除します。
+   * @why CLIのネットワーク問題や内部無限ループなどによるリソースロックを解除し、自動的に `agent:triage`（手動介入待ち）に回すことでワークフローを復旧するため。
+   */
   private async recoverStuckIssues(repo: string): Promise<void> {
     const runningIssues = await getIssuesWithLabel(repo, 'agent:running');
     const now = new Date().getTime();
@@ -85,6 +90,10 @@ export class PipelineSupervisor {
     }
   }
 
+  /**
+   * @what 'agent:running' ラベルがついた状態のまま、更新がなく15分以上経過したフリーズ状態のPRを検知してロックを解除します。
+   * @why レビューやQA実行中にハングしたPRタスクを自動で検知して `agent:triage` に移行させ、全体の進捗が停滞するのを防ぐため。
+   */
   private async recoverStuckPRs(repo: string): Promise<void> {
     const runningPRs = await getPullRequestsWithLabel(repo, 'agent:running');
     const now = new Date().getTime();
@@ -116,6 +125,10 @@ export class PipelineSupervisor {
     }
   }
 
+  /**
+   * @what `agent:` 系のプレフィックスがついたラベルが一切付与されていない新規オープンされたIssueを検知し、自動で `agent:spec` ラベルを貼ります。
+   * @why 新しい課題がGitHub上に起票された際、人間が手動でラベルを割り当てることなく、自動的にパイプラインの初期フェーズ（仕様定義）に乗せるため。
+   */
   private async triageUnlabeledIssues(repo: string): Promise<void> {
     try {
       // Fetch open issues from the last 100 entries
@@ -164,12 +177,12 @@ export class PipelineSupervisor {
             const updatedAt = new Date(issue.updatedAt).getTime();
             const commentCreatedAt = new Date(latestComment.createdAt).getTime();
 
-            // 30 seconds threshold to prevent race conditions during bot execution
-            if (updatedAt - commentCreatedAt > 30 * 1000) {
-              logger.info(`User activity (edit/label) detected on Issue #${issue.number}. Auto-removing 'agent:wait'.`, 'supervisor');
+            // 15 minutes threshold to allow users to finish consecutive operations and recover forgotten label
+            if (updatedAt - commentCreatedAt > 15 * 60 * 1000) {
+              logger.info(`User activity (edit/label) detected on Issue #${issue.number} with forgotten wait label. Auto-removing 'agent:wait'.`, 'supervisor');
               await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
 
-              const commentBody = `🤖 **Orchestrator**: 課題の更新を検知したため、\`agent:wait\` ラベルを解除して処理を再開します。`;
+              const commentBody = `🤖 **Orchestrator**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
               await execCommand(`gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`);
             }
           }

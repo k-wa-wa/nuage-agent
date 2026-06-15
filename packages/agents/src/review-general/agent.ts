@@ -1,5 +1,9 @@
 import { Agent, AgentContext } from '../types.js';
 
+/**
+ * @what 一般レビューフェーズのエージェント（ReviewGeneralAgent）としての指示プロンプトを構築します。
+ * @why バグ、構文エラー、一般的なセキュリティ脆弱性やパフォーマンス問題（N+1問題など）を検知し、PRの合格・差し戻しを判定するレビュー観点を与えるため。
+ */
 export class ReviewGeneralAgent implements Agent {
   readonly id = 'review-general';
   readonly targetType = 'pr';

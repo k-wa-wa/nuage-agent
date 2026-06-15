@@ -4,6 +4,10 @@ import { PipelineSupervisor } from './supervisor.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * @what アプリケーションのエントリーポイントであり、デーモンモード（常駐監視）またはシングルサイクルモード（使い捨て）で巡回プロセスを起動します。
+ * @why コマンドライン引数を読み込み、Supervisor監視とクローラー監視の2つの役割（状態チェックおよびフリーズ復旧）を順次または無限ループで実行し続けるため。
+ */
 async function main() {
   logger.info('Initializing nuage-agent runner...', 'main');
 

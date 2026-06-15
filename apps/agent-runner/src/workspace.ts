@@ -4,8 +4,8 @@ import { execSync } from 'child_process';
 import { AppConfig, logger } from '@nuage-agent/core';
 
 /**
- * Ensures a repository is cloned locally and updated to the latest main branch.
- * Returns the absolute path of the repository workspace.
+ * @what 対象リポジトリを `workspaces/` 配下にローカルクローンし、最新の `main` / `master` ブランチを取得して常に同期します。
+ * @why 各エージェント（仕様・開発・QAなど）がローカルファイルシステム上で安全にファイルを編集・テスト実行・PR作成などを行えるよう、最新の開発作業環境を用意するため。
  */
 export function ensureWorkspace(repo: string, config: AppConfig): string {
   // Repo is e.g. "k-wa-wa/workflow-sandbox" -> folder name is "workflow-sandbox"

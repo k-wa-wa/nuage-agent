@@ -1,5 +1,9 @@
 import { Agent, AgentContext } from '../types.js';
 
+/**
+ * @what 設計規約・影響範囲チェックを行うレビューエージェント（ReviewSemanticAgent）としての指示プロンプトを構築します。
+ * @why 対象プロジェクトの設計原則やディレクトリ構造ルール（repo-map）に適合しているか、ドキュメントが同期されているか、既存コードに破壊的な影響を及ぼさないかをチェックするため。
+ */
 export class ReviewSemanticAgent implements Agent {
   readonly id = 'review-semantic';
   readonly targetType = 'pr';

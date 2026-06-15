@@ -1,5 +1,9 @@
 import { Agent, AgentContext } from '../types.js';
 
+/**
+ * @what 仕様定義フェーズのエージェント（SpecAgent）としてのプロンプトを構築します。
+ * @why ユーザーからの曖昧な課題起票に対して自動で壁打ち・確認質問を行い、受け入れ基準（Acceptance Criteria）と仕様書（PRD）をIssue本文に確定させて開発へタスクを引き渡すため。
+ */
 export class SpecAgent implements Agent {
   readonly id = 'spec';
   readonly targetType = 'issue';

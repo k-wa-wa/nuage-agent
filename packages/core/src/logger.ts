@@ -1,3 +1,7 @@
+/**
+ * @what 進捗やエラー等のログを色付きでコンソールに出力するカスタムロギングユーティリティです。
+ * @why ランナーやエージェントの各モジュールが実行状況をプレフィックス付きで識別しやすく、かつデバッグログの有効化（DEBUG環境変数）等を一括制御するため。
+ */
 export const logger = {
   info(message: string, context?: string) {
     const ctx = context ? `[${context}] ` : '';

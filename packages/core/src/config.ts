@@ -12,7 +12,8 @@ export const DEFAULT_GEMINI_FLAGS = [];
 export const DEFAULT_WORKSPACES_DIR_NAME = 'workspaces';
 
 /**
- * Finds the workspace root directory by looking for pnpm-workspace.yaml.
+ * @what pnpm-workspace.yaml を探索してモノレポのワークスペースのルートディレクトリパスを検出します。
+ * @why 相対パスの解釈基準点や、クローンしたワークスペースを配置する共通フォルダ `workspaces/` の絶対パスを常に正確に取得するため。
  */
 function findRootDir(): string {
   let currentDir = process.cwd();
@@ -26,10 +27,8 @@ function findRootDir(): string {
 }
 
 /**
- * Simple helper to parse a list of repositories from a YAML config file.
- * Supports:
- *   repositories:
- *     - owner/repo-name
+ * @what YAML形式の設定ファイルから、監視対象リポジトリ名のリスト（例: owner/repo）を抽出してパースします。
+ * @why 依存ライブラリを追加せずにシンプルかつ堅牢にリポジトリ設定配列をロードするため。
  */
 function parseYamlRepositories(content: string): string[] {
   const repos: string[] = [];
@@ -64,6 +63,10 @@ function parseYamlRepositories(content: string): string[] {
   return repos;
 }
 
+/**
+ * @what アプリケーション起動時の引数（-d, --repo-map-dir）を検証してロードし、対象リポジトリ一覧やCLIパスなどの構成設定オブジェクト（AppConfig）を生成します。
+ * @why 実行環境（Sandbox / Production）ごとの設定を間違えることのないよう明示的な引数入力を必須とし、システム定数と統合した設定を安全に配るため。
+ */
 export function loadConfig(): AppConfig {
   const rootDir = findRootDir();
   logger.debug(`Detected workspace root directory: ${rootDir}`, 'config');
