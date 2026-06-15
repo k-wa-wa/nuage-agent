@@ -6,7 +6,6 @@ export interface RunCommandOptions {
   args: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
-  stdin?: string;
 }
 
 export interface RunCommandResult {
@@ -20,7 +19,7 @@ export interface RunCommandResult {
  * @why 各種エージェント（Claude Code 等）や git/gh CLI コマンドを、ディレクトリや環境変数を適切に指定した状態で、非同期かつストリーミング処理で安全に実行するため。
  */
 export function runCommand(options: RunCommandOptions): Promise<RunCommandResult> {
-  const { cmd, args, cwd, env, stdin } = options;
+  const { cmd, args, cwd, env } = options;
 
   logger.info(`Executing CLI: ${cmd} ${args.join(' ')}`, 'runner');
 
@@ -31,6 +30,7 @@ export function runCommand(options: RunCommandOptions): Promise<RunCommandResult
     const child = spawn(normalizedCmd, args, {
       cwd,
       shell: false, // Turn off shell to prevent DEP0190 and escaping issues
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         ...env,
@@ -39,13 +39,6 @@ export function runCommand(options: RunCommandOptions): Promise<RunCommandResult
 
     let stdout = '';
     let stderr = '';
-
-    // Write prompt to stdin if provided.
-    // child.stdin is always a Writable (non-null) when shell: false and no stdio override.
-    if (stdin !== undefined) {
-      child.stdin.write(stdin);
-      child.stdin.end();
-    }
 
     child.stdout.on('data', (data: Buffer) => {
       const chunk = data.toString();

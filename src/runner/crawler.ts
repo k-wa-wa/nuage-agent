@@ -219,8 +219,8 @@ export class PipelineCrawler {
   }
 
   /**
-   * @what 指定されたエージェントの指示プロンプトを標準入力（stdin）経由で LLM CLI（Claude/Gemini）に流し込み、実行を開始します。
-   * @why 複数行に及ぶプロンプトを引数のシェルエスケープ問題を完全に回避しつつ安全に引き渡し、さらに進捗出力をリアルタイムでユーザーのコンソールにストリームするため。
+   * @what 指定されたエージェントの指示プロンプトを引数（-p）として LLM CLI（Claude/Gemini）に渡し、実行を開始します。
+   * @why 複数行に及ぶプロンプトを安全に引き渡し、さらに進捗出力をリアルタイムでユーザーのコンソールにストリームするため。
    */
   private async executeAgentCLI(
     agent: Agent,
