@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Orchestrator for automated development workflows using LLM CLIs and GitHub Issues.",
+  "description": "Automated development pipeline using LLM CLIs and GitHub Issues.",
   "scripts": {
     "dev:runner": "pnpm --filter agent-runner dev",
     "build": "pnpm -r build",

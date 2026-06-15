@@ -165,7 +165,7 @@ export class PipelineSupervisor {
           );
           await updateIssueLabels(repo, item.number, ['agent:spec'], []);
 
-          const commentBody = `🤖 **Orchestrator**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
+          const commentBody = `🤖 **Supervisor**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
           await execCommand(
             `gh issue comment ${item.number} --repo "${repo}" --body "${commentBody}"`,
           );
@@ -209,7 +209,7 @@ export class PipelineSupervisor {
               );
               await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
 
-              const commentBody = `🤖 **Orchestrator**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
+              const commentBody = `🤖 **Supervisor**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
               await execCommand(
                 `gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`,
               );
