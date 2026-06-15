@@ -115,6 +115,9 @@ export function loadConfig(): AppConfig {
 
     logger.info(`Loaded repositories from ${yamlPath}: [${repositories.join(', ')}]`, 'config');
 
+    const autoMerge = args.includes('--auto-merge');
+    logger.info(`QA Agent Auto Merge: ${autoMerge}`, 'config');
+
     return {
       repositories,
       repoMapDir: resolvedRepoMapDir,
@@ -124,6 +127,7 @@ export function loadConfig(): AppConfig {
       geminiCommand: DEFAULT_GEMINI_COMMAND,
       geminiFlags: DEFAULT_GEMINI_FLAGS,
       workspacesDir: path.resolve(rootDir, DEFAULT_WORKSPACES_DIR_NAME),
+      qaAutoMerge: autoMerge,
     };
   } catch (error) {
     throw new Error(`Failed to load and parse repo-map configuration: ${String(error)}`, {

@@ -194,6 +194,7 @@ export class PipelineCrawler {
           repoName: repo,
           repoMapMd,
           pr,
+          autoMerge: this.config.qaAutoMerge,
         };
 
         const prompt = agent.buildPrompt(context);

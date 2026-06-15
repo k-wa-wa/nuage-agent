@@ -5,6 +5,7 @@ export interface AgentContext {
   repoMapMd: string;
   issue?: GitHubIssue;
   pr?: GitHubPullRequest;
+  autoMerge?: boolean;
 }
 
 export interface Agent {

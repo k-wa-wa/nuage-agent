@@ -9,6 +9,7 @@ export interface AppConfig {
   geminiCommand: string;
   geminiFlags: string[];
   workspacesDir: string;
+  qaAutoMerge: boolean;
 }
 
 export interface GitHubIssue {

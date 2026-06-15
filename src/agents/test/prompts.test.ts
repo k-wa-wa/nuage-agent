@@ -85,7 +85,7 @@ void test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /N\+1クエリ/);
 });
 
-void test('QAAgent compiles prompt with correct metadata', () => {
+void test('QAAgent compiles prompt with correct metadata (manual merge default)', () => {
   const agent = new QAAgent();
   const context: AgentContext = {
     repoName: 'nuage-cluster',
@@ -111,6 +111,37 @@ void test('QAAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /Pull Request #999/);
   assert.match(prompt, /gh pr checkout 999/);
   assert.match(prompt, /gh issue edit 999 --remove-label "agent:qa"/);
+  assert.match(prompt, /手動でのマージを求める/);
+});
+
+void test('QAAgent compiles prompt with correct metadata and auto-merge instructions', () => {
+  const agent = new QAAgent();
+  const context: AgentContext = {
+    repoName: 'nuage-cluster',
+    repoMapMd: '## QA Rules',
+    pr: {
+      number: 999,
+      title: 'Integrate Stripe API',
+      body: 'Stripe webhook and checkout flow.',
+      state: 'open',
+      labels: ['agent:qa'],
+      branch: 'feature/stripe',
+      baseBranch: 'main',
+      merged: false,
+      createdAt: '',
+      updatedAt: '',
+    },
+    autoMerge: true,
+  };
+
+  const prompt = agent.buildPrompt(context);
+
+  assert.match(prompt, /QAエージェント/);
+  assert.match(prompt, /nuage-cluster/);
+  assert.match(prompt, /Pull Request #999/);
+  assert.match(prompt, /gh pr checkout 999/);
+  assert.match(prompt, /gh pr merge 999 --merge --delete-branch/);
+  assert.match(prompt, /自動マージを実行します/);
 });
 
 void test('DevPRAgent compiles prompt with correct metadata', () => {
