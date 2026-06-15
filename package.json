@@ -1,0 +1,19 @@
+{
+  "name": "nuage-agent-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orchestrator for automated development workflows using LLM CLIs and GitHub Issues.",
+  "scripts": {
+    "dev:runner": "pnpm --filter agent-runner dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "sandbox:setup": "bash scripts/setup-sandbox.sh",
+    "sandbox:run": "bash scripts/run-sandbox.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  }
+}
