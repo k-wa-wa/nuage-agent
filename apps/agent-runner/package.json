@@ -5,7 +5,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "labels:create": "tsx src/create-labels-cli.ts"
   },
   "dependencies": {
     "@nuage-agent/core": "workspace:*",

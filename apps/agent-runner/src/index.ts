@@ -1,7 +1,6 @@
 import { loadConfig, logger } from '@nuage-agent/core';
 import { PipelineCrawler } from './crawler.js';
 import { PipelineSupervisor } from './supervisor.js';
-import { ensureLabelsExist } from './github-client.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,16 +13,6 @@ async function main() {
   } catch (error) {
     logger.error('Failed to load configuration', 'main', error);
     process.exit(1);
-  }
-
-  // Ensure pipeline labels exist in all registered repositories
-  logger.info('Checking and initializing repository labels on GitHub...', 'main');
-  for (const repo of config.repositories) {
-    try {
-      await ensureLabelsExist(repo);
-    } catch (err) {
-      logger.error(`Failed to ensure labels for repository: ${repo}`, 'main', err);
-    }
   }
 
   const crawler = new PipelineCrawler(config);

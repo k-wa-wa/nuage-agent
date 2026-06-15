@@ -1,0 +1,32 @@
+import { loadConfig, logger } from '@nuage-agent/core';
+import { ensureLabelsExist } from './github-client.js';
+
+async function main() {
+  logger.info('Starting pipeline label creator...', 'labels-cli');
+
+  let config;
+  try {
+    config = loadConfig();
+  } catch (error) {
+    logger.error('Failed to load configuration', 'labels-cli', error);
+    process.exit(1);
+  }
+
+  logger.info(`Found ${config.repositories.length} repositories in configuration.`, 'labels-cli');
+
+  for (const repo of config.repositories) {
+    try {
+      await ensureLabelsExist(repo);
+      logger.success(`Successfully ensured labels for repository: ${repo}`, 'labels-cli');
+    } catch (error) {
+      logger.error(`Failed to ensure labels for repository: ${repo}`, 'labels-cli', error);
+    }
+  }
+
+  logger.info('Pipeline label creator completed.', 'labels-cli');
+}
+
+main().catch((error) => {
+  logger.error('Fatal error in pipeline label creator', 'labels-cli', error);
+  process.exit(1);
+});
