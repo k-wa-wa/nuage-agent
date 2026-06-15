@@ -7,8 +7,8 @@ import { logger } from './logger.js';
 export const DEFAULT_POLLING_INTERVAL_SECONDS = 60;
 export const DEFAULT_CLAUDE_COMMAND = '~/.local/bin/claude';
 export const DEFAULT_CLAUDE_FLAGS = ['--dangerously-skip-permissions'];
-export const DEFAULT_GEMINI_COMMAND = 'gemini';
-export const DEFAULT_GEMINI_FLAGS = [];
+export const DEFAULT_GEMINI_COMMAND = '~/.local/bin/agy';
+export const DEFAULT_GEMINI_FLAGS = ['--dangerously-skip-permissions'];
 export const DEFAULT_WORKSPACES_DIR_NAME = 'workspaces';
 
 /**

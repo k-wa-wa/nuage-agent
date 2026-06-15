@@ -28,6 +28,9 @@ export class PipelineCrawler {
       claudeCommand: config.claudeCommand.startsWith('~/')
         ? config.claudeCommand.replace('~', process.env.HOME ?? '')
         : config.claudeCommand,
+      geminiCommand: config.geminiCommand.startsWith('~/')
+        ? config.geminiCommand.replace('~', process.env.HOME ?? '')
+        : config.geminiCommand,
     };
   }
 
@@ -59,7 +62,10 @@ export class PipelineCrawler {
     }
 
     this.isRunning = true;
-    logger.info('Starting crawl cycle...', 'crawler');
+    logger.info(
+      `\n========================================= [Crawl Cycle Start] =========================================`,
+      'crawler',
+    );
 
     try {
       for (const repo of this.config.repositories) {
@@ -87,7 +93,10 @@ export class PipelineCrawler {
       logger.error('Error during crawl cycle', 'crawler', error);
     } finally {
       this.isRunning = false;
-      logger.info('Crawl cycle completed.', 'crawler');
+      logger.info(
+        `========================================= [Crawl Cycle End] =========================================\n`,
+        'crawler',
+      );
     }
   }
 
@@ -107,13 +116,17 @@ export class PipelineCrawler {
       }
 
       logger.info(
-        `Found Issue #${issue.number} for Agent ${agent.id}: "${issue.title}"`,
+        `\n┌────────────────────────────────────────────────────────────────────────────────` +
+        `\n│ >>> Starting Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
+        `\n│     Title: "${issue.title}"` +
+        `\n└────────────────────────────────────────────────────────────────────────────────`,
         'crawler',
       );
 
       // Lock the issue
       await updateIssueLabels(repo, issue.number, ['agent:running'], []);
 
+      let success = true;
       try {
         const workspacePath = ensureWorkspace(repo, this.config);
         const repoMapMd = this.getRepoMapMd(repo);
@@ -129,6 +142,7 @@ export class PipelineCrawler {
         // Execute CLI
         await this.executeAgentCLI(agent, prompt, workspacePath);
       } catch (error) {
+        success = false;
         logger.error(
           `Error executing Agent ${agent.id} on Issue #${issue.number}`,
           'crawler',
@@ -137,6 +151,13 @@ export class PipelineCrawler {
       } finally {
         // Unlock the issue
         await updateIssueLabels(repo, issue.number, [], ['agent:running']);
+        logger.info(
+          `\n┌────────────────────────────────────────────────────────────────────────────────` +
+          `\n│ <<< Finished Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
+          `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
+          `\n└────────────────────────────────────────────────────────────────────────────────\n`,
+          'crawler',
+        );
       }
     }
   }
@@ -153,11 +174,18 @@ export class PipelineCrawler {
         continue;
       }
 
-      logger.info(`Found PR #${pr.number} for Agent ${agent.id}: "${pr.title}"`, 'crawler');
+      logger.info(
+        `\n┌────────────────────────────────────────────────────────────────────────────────` +
+        `\n│ >>> Starting Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
+        `\n│     Title: "${pr.title}"` +
+        `\n└────────────────────────────────────────────────────────────────────────────────`,
+        'crawler',
+      );
 
       // Lock the PR
       await updatePullRequestLabels(repo, pr.number, ['agent:running'], []);
 
+      let success = true;
       try {
         const workspacePath = ensureWorkspace(repo, this.config);
         const repoMapMd = this.getRepoMapMd(repo);
@@ -173,10 +201,18 @@ export class PipelineCrawler {
         // Execute CLI
         await this.executeAgentCLI(agent, prompt, workspacePath);
       } catch (error) {
+        success = false;
         logger.error(`Error executing Agent ${agent.id} on PR #${pr.number}`, 'crawler', error);
       } finally {
         // Unlock the PR
         await updatePullRequestLabels(repo, pr.number, [], ['agent:running']);
+        logger.info(
+          `\n┌────────────────────────────────────────────────────────────────────────────────` +
+          `\n│ <<< Finished Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
+          `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
+          `\n└────────────────────────────────────────────────────────────────────────────────\n`,
+          'crawler',
+        );
       }
     }
   }
@@ -191,21 +227,48 @@ export class PipelineCrawler {
     workspacePath: string,
   ): Promise<void> {
     const isClaude = agent.commandType === 'claude';
-    const cmd = isClaude ? this.config.claudeCommand : this.config.geminiCommand;
-    const flags = isClaude ? this.config.claudeFlags : this.config.geminiFlags;
+    const isGemini = agent.commandType === 'gemini';
+    let cmd = isClaude ? this.config.claudeCommand : this.config.geminiCommand;
+    let flags = isClaude ? this.config.claudeFlags : this.config.geminiFlags;
+    let commandType = agent.commandType;
 
-    logger.info(`Invoking CLI (${agent.commandType}) for Agent: ${agent.id}...`, 'crawler');
+    logger.info(`Invoking CLI (${commandType}) for Agent: ${agent.id}...`, 'crawler');
 
-    const runnerArgs = [...flags, isClaude ? '-p' : ''].filter((arg) => arg !== '');
+    // Both Claude Code CLI and Antigravity CLI (agy) use '-p' for non-interactive print mode
+    let runnerArgs = [...flags, (isClaude || isGemini) ? '-p' : ''].filter((arg) => arg !== '');
 
-    const result = await runCommand({
-      cmd,
-      args: runnerArgs,
-      cwd: workspacePath,
-      stdin: prompt,
-    });
+    try {
+      const result = await runCommand({
+        cmd,
+        args: runnerArgs,
+        cwd: workspacePath,
+        stdin: prompt,
+      });
 
-    logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
+      logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
+    } catch (error: any) {
+      if (commandType === 'gemini' && (error?.code === 'ENOENT' || error?.message?.includes('ENOENT'))) {
+        logger.warn(
+          `Gemini CLI ("${cmd}") not found. Falling back to Claude CLI ("${this.config.claudeCommand}").`,
+          'crawler',
+        );
+        cmd = this.config.claudeCommand;
+        flags = this.config.claudeFlags;
+        commandType = 'claude';
+        runnerArgs = [...flags, '-p'].filter((arg) => arg !== '');
+
+        logger.info(`Invoking CLI (${commandType}) for Agent: ${agent.id} (fallback)...`, 'crawler');
+        const result = await runCommand({
+          cmd,
+          args: runnerArgs,
+          cwd: workspacePath,
+          stdin: prompt,
+        });
+        logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
+      } else {
+        throw error;
+      }
+    }
   }
 
   /**

@@ -185,7 +185,7 @@ export async function updatePullRequestLabels(
   removeLabels: string[],
 ): Promise<void> {
   try {
-    let cmd = `gh pr edit ${prNumber} --repo "${repo}"`;
+    let cmd = `gh issue edit ${prNumber} --repo "${repo}"`;
     if (addLabels.length > 0) {
       cmd += ' ' + addLabels.map((l) => `--add-label "${l}"`).join(' ');
     }

@@ -110,5 +110,5 @@ void test('QAAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /nuage-cluster/);
   assert.match(prompt, /Pull Request #999/);
   assert.match(prompt, /gh pr checkout 999/);
-  assert.match(prompt, /gh pr edit 999 --remove-label "agent:qa"/);
+  assert.match(prompt, /gh issue edit 999 --remove-label "agent:qa"/);
 });

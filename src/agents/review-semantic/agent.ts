@@ -44,7 +44,7 @@ GitHub Pull Request #${pr.number} (タイトル: 「${pr.title}」) の差分レ
 1. **修正が必要な場合 (Failed)**
    指摘事項がある場合、PRにインラインまたは全体コメントで詳細な理由と修正案を投稿し、ラベルを開発フェーズに戻す。
    - コメント投稿: 「gh pr comment ${pr.number} --body "[指摘内容と修正案]"」
-   - ラベル変更: 「gh pr edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
+   - ラベル変更: 「gh issue edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
 
 2. **問題ない場合 (Passed)**
    すべてのチェックに合格した場合、PRにApproveコメントを投稿する。
