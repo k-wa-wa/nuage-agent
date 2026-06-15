@@ -1,4 +1,4 @@
-import { Agent, AgentContext } from '../types.js';
+import type { Agent, AgentContext } from '../types.js';
 
 /**
  * @what 開発フェーズのエージェント（DevAgent）としての指示プロンプトを構築します。
@@ -29,7 +29,7 @@ GitHub Issue #${issue.number} 「${issue.title}」に記載されている仕様
 IssueのDescriptionには、すでにSpecAgentによって確定された仕様が記載されています。
 
 - **仕様 (PRD/AC)**:
-${issue.body || '(仕様の読み込みに失敗しました。Issueの本文を確認してください)'}
+${issue.body ?? '(仕様の読み込みに失敗しました。Issueの本文を確認してください)'}
 
 ---
 
@@ -48,9 +48,9 @@ ${issue.body || '(仕様の読み込みに失敗しました。Issueの本文を
    ローカルテストが完全に通過したら、変更内容をリモートにプッシュし、Pull Request (PR) を作成してください。
    - PRのタイトル: 「feat: #${issue.number} ${issue.title}」
    - PRのラベル: 「agent:review」を付与します。
-     コマンド例: 「gh pr create --title \"feat: #${issue.number} ${issue.title}\" --body \"Closes #${issue.number}\" --label \"agent:review\"」
+     コマンド例: 「gh pr create --title "feat: #${issue.number} ${issue.title}" --body "Closes #${issue.number}" --label "agent:review"」
    - 最後に、元のIssueのラベルを「agent:dev」から剥がしてください（PRを作成したことで、開発側の第一段階が完了するため）。
-     コマンド例: 「gh issue edit ${issue.number} --remove-label \"agent:dev\"」
+     コマンド例: 「gh issue edit ${issue.number} --remove-label "agent:dev"」
 `;
   }
 }

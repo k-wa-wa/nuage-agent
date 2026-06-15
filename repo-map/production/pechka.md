@@ -3,6 +3,7 @@
 **説明**: フロントエンド・ダッシュボードコンソール (Vite React + TypeScript)
 
 ### 技術スタック
+
 - React
 - Vite
 - Tailwind CSS
@@ -10,6 +11,7 @@
 - npm
 
 ### 主要ディレクトリレイアウト
+
 - `src/components`: UIコンポーネント (共通再利用部品)
 - `src/pages`: 画面単位のコンポーネント (ページエントリー)
 - `src/hooks`: カスタムReactフック (カスタムロジック)
@@ -18,6 +20,7 @@
 - `src/assets`: 画像、アイコンなどの静的アセット
 
 ### 設計規約 / ガードレール
+
 - 全てのUIコンポーネントは Tailwind CSS を使用しスタイリングすること。
 - コンポーネントは基本的にに関数コンポーネント（Functional Components）で定義すること。
 - 型定義は `src/types/` 内に定義し、コンポーネント内での `any` の使用は厳禁。

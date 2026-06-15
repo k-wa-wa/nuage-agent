@@ -33,16 +33,19 @@ async function main() {
     process.exit(0);
   }
 
-  logger.info(`Starting in daemon mode. Polling interval: ${config.pollingIntervalSeconds}s`, 'main');
-  
-  while (true) {
+  logger.info(
+    `Starting in daemon mode. Polling interval: ${config.pollingIntervalSeconds}s`,
+    'main',
+  );
+
+  for (;;) {
     try {
       // 1. Run supervisor checklist (timeouts, unlabeled issues)
       await supervisor.runSupervisorChecks();
 
       // 2. Run crawler check cycle (triggers spec, dev, review, qa agents)
       await crawler.crawlCycle();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Unhandled error in runner loop', 'main', error);
     }
 
@@ -51,7 +54,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   logger.error('Fatal runner error', 'main', error);
   process.exit(1);
 });

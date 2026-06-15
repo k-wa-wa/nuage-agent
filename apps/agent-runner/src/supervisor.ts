@@ -1,17 +1,18 @@
-import { AppConfig, logger } from '@nuage-agent/core';
-import { 
-  getIssuesWithLabel, 
-  updateIssueLabels, 
-  getPullRequestsWithLabel, 
+import type { AppConfig } from '@nuage-agent/core';
+import { logger } from '@nuage-agent/core';
+import {
+  getIssuesWithLabel,
+  updateIssueLabels,
+  getPullRequestsWithLabel,
   updatePullRequestLabels,
   getIssueComments,
-  getViewerLogin
+  getViewerLogin,
 } from './github-client.js';
 import { exec } from 'child_process';
 
 function execCommand(cmd: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
+    exec(cmd, (error, stdout, _stderr) => {
       if (error) {
         reject(error);
       } else {
@@ -21,6 +22,10 @@ function execCommand(cmd: string): Promise<string> {
   });
 }
 
+/**
+ * @what GitHub Issue/PRパイプラインのフリーズ・未ラベル状態を監視し、タイムアウト・自動トリアージ・agent:wait解除を行う監視者クラスです。
+ * @why CrawlerがアクティブなIssueを処理する一方、スタック・放置されたタスクを救済する役割を担い、ワークフロー全体の詰まりを防止するため。
+ */
 export class PipelineSupervisor {
   private config: AppConfig;
   private timeoutLimitMs = 15 * 60 * 1000; // 15 minutes
@@ -68,20 +73,25 @@ export class PipelineSupervisor {
       const timeElapsed = now - updatedAt;
 
       if (timeElapsed > this.timeoutLimitMs) {
-        logger.warn(`Stuck lock detected on Issue #${issue.number} in ${repo} (Last updated: ${issue.updatedAt})`, 'supervisor');
-        
+        logger.warn(
+          `Stuck lock detected on Issue #${issue.number} in ${repo} (Last updated: ${issue.updatedAt})`,
+          'supervisor',
+        );
+
         // Remove lock and transition to triage
         await updateIssueLabels(
-          repo, 
-          issue.number, 
-          ['agent:triage'], 
-          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa']
+          repo,
+          issue.number,
+          ['agent:triage'],
+          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
         );
 
         // Comment on the issue
         const commentBody = `⚠️ **Supervisor Alert**: このタスクの実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。実行中にCLIがフリーズしたか、エラーが発生した可能性があります。`;
         try {
-          await execCommand(`gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`);
+          await execCommand(
+            `gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`,
+          );
           logger.success(`Posted timeout alert comment on Issue #${issue.number}`, 'supervisor');
         } catch (error) {
           logger.error(`Failed to post comment on Issue #${issue.number}`, 'supervisor', error);
@@ -103,14 +113,17 @@ export class PipelineSupervisor {
       const timeElapsed = now - updatedAt;
 
       if (timeElapsed > this.timeoutLimitMs) {
-        logger.warn(`Stuck lock detected on PR #${pr.number} in ${repo} (Last updated: ${pr.updatedAt})`, 'supervisor');
-        
+        logger.warn(
+          `Stuck lock detected on PR #${pr.number} in ${repo} (Last updated: ${pr.updatedAt})`,
+          'supervisor',
+        );
+
         // Remove lock and transition to triage
         await updatePullRequestLabels(
-          repo, 
-          pr.number, 
-          ['agent:triage'], 
-          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa']
+          repo,
+          pr.number,
+          ['agent:triage'],
+          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
         );
 
         // Comment on the PR
@@ -130,22 +143,32 @@ export class PipelineSupervisor {
    * @why 新しい課題がGitHub上に起票された際、人間が手動でラベルを割り当てることなく、自動的にパイプラインの初期フェーズ（仕様定義）に乗せるため。
    */
   private async triageUnlabeledIssues(repo: string): Promise<void> {
+    interface RawIssueSummary {
+      number: number;
+      title: string;
+      labels: { name: string }[];
+    }
     try {
       // Fetch open issues from the last 100 entries
       const cmd = `gh issue list --repo "${repo}" --limit 100 --json number,title,labels`;
       const output = await execCommand(cmd);
-      const issues = JSON.parse(output) as any[];
+      const issues = JSON.parse(output) as RawIssueSummary[];
 
       for (const item of issues) {
-        const labels = item.labels.map((l: any) => l.name) as string[];
-        const hasAgentLabel = labels.some(l => l.startsWith('agent:'));
+        const labels = item.labels.map((l) => l.name);
+        const hasAgentLabel = labels.some((l) => l.startsWith('agent:'));
 
         if (!hasAgentLabel) {
-          logger.info(`Unlabeled Issue #${item.number} found. Assigning agent:spec...`, 'supervisor');
+          logger.info(
+            `Unlabeled Issue #${item.number} found. Assigning agent:spec...`,
+            'supervisor',
+          );
           await updateIssueLabels(repo, item.number, ['agent:spec'], []);
-          
+
           const commentBody = `🤖 **Orchestrator**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
-          await execCommand(`gh issue comment ${item.number} --repo "${repo}" --body "${commentBody}"`);
+          await execCommand(
+            `gh issue comment ${item.number} --repo "${repo}" --body "${commentBody}"`,
+          );
         }
       }
     } catch (error) {
@@ -162,7 +185,9 @@ export class PipelineSupervisor {
   private async recoverWaitingIssues(repo: string): Promise<void> {
     try {
       const waitingIssues = await getIssuesWithLabel(repo, 'agent:wait');
-      if (waitingIssues.length === 0) return;
+      if (waitingIssues.length === 0) {
+        return;
+      }
 
       const currentBotUser = await getViewerLogin();
 
@@ -179,11 +204,16 @@ export class PipelineSupervisor {
 
             // 15 minutes threshold to allow users to finish consecutive operations and recover forgotten label
             if (updatedAt - commentCreatedAt > 15 * 60 * 1000) {
-              logger.info(`User activity (edit/label) detected on Issue #${issue.number} with forgotten wait label. Auto-removing 'agent:wait'.`, 'supervisor');
+              logger.info(
+                `User activity (edit/label) detected on Issue #${issue.number} with forgotten wait label. Auto-removing 'agent:wait'.`,
+                'supervisor',
+              );
               await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
 
               const commentBody = `🤖 **Orchestrator**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
-              await execCommand(`gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`);
+              await execCommand(
+                `gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`,
+              );
             }
           }
         }

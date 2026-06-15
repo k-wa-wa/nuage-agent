@@ -26,9 +26,7 @@ export function runCommand(options: RunCommandOptions): Promise<RunCommandResult
 
   return new Promise((resolve, reject) => {
     // We expand home directory (~) if present in the command path
-    const normalizedCmd = cmd.startsWith('~/')
-      ? cmd.replace('~', process.env.HOME || '')
-      : cmd;
+    const normalizedCmd = cmd.startsWith('~/') ? cmd.replace('~', process.env.HOME ?? '') : cmd;
 
     const child = spawn(normalizedCmd, args, {
       cwd,
@@ -42,20 +40,21 @@ export function runCommand(options: RunCommandOptions): Promise<RunCommandResult
     let stdout = '';
     let stderr = '';
 
-    // Write prompt to stdin if provided
-    if (stdin !== undefined && child.stdin) {
+    // Write prompt to stdin if provided.
+    // child.stdin is always a Writable (non-null) when shell: false and no stdio override.
+    if (stdin !== undefined) {
       child.stdin.write(stdin);
       child.stdin.end();
     }
 
-    child.stdout?.on('data', (data) => {
+    child.stdout.on('data', (data: Buffer) => {
       const chunk = data.toString();
       stdout += chunk;
       // Output CLI progress in real-time
       process.stdout.write(chunk);
     });
 
-    child.stderr?.on('data', (data) => {
+    child.stderr.on('data', (data: Buffer) => {
       const chunk = data.toString();
       stderr += chunk;
       // Output CLI error progress in real-time
@@ -73,4 +72,3 @@ export function runCommand(options: RunCommandOptions): Promise<RunCommandResult
     });
   });
 }
-

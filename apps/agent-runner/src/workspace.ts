@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { AppConfig, logger } from '@nuage-agent/core';
+import type { AppConfig } from '@nuage-agent/core';
+import { logger } from '@nuage-agent/core';
 
 /**
  * @what 対象リポジトリを `workspaces/` 配下にローカルクローンし、最新の `main` / `master` ブランチを取得して常に同期します。
@@ -9,7 +10,7 @@ import { AppConfig, logger } from '@nuage-agent/core';
  */
 export function ensureWorkspace(repo: string, config: AppConfig): string {
   // Repo is e.g. "k-wa-wa/workflow-sandbox" -> folder name is "workflow-sandbox"
-  const repoFolder = repo.split('/').pop() || repo;
+  const repoFolder = repo.split('/').pop() ?? repo;
   const targetDir = path.resolve(config.workspacesDir, repoFolder);
 
   // Ensure parent workspaces dir exists
@@ -33,8 +34,11 @@ export function ensureWorkspace(repo: string, config: AppConfig): string {
       execSync(`git checkout main || git checkout master`, { cwd: targetDir, stdio: 'ignore' });
       execSync(`git pull`, { cwd: targetDir, stdio: 'ignore' });
       logger.success(`Repository ${repo} updated.`, 'workspace');
-    } catch (error) {
-      logger.warn(`Failed to update/pull latest on ${repo}. Will proceed with current state.`, 'workspace');
+    } catch (_error) {
+      logger.warn(
+        `Failed to update/pull latest on ${repo}. Will proceed with current state.`,
+        'workspace',
+      );
     }
   }
 

@@ -1,4 +1,4 @@
-import { Agent, AgentContext } from '../types.js';
+import type { Agent, AgentContext } from '../types.js';
 
 /**
  * @what 一般レビューフェーズのエージェント（ReviewGeneralAgent）としての指示プロンプトを構築します。
@@ -40,14 +40,14 @@ GitHub CLI「gh」を使用して、「gh pr diff ${pr.number}」を実行し、
 
 ## レビュー結果の処理ルール
 1. **修正が必要な場合 (Failed)**:
-   - レビュー観点に抵触する箇所を見つけた場合、PRにインライン、または全体コメントとして詳細な理由と修正案を投稿してください。
-     コマンド例: 「gh pr comment ${pr.number} --body \"[指摘内容と修正のアドバイス]\"」
+   - レビュー観点に抑触する箇所を見つけた場合、PRにインライン、または全体コメントとして詳細な理由と修正案を投稿してください。
+     コマンド例: 「gh pr comment ${pr.number} --body "[指摘内容と修正のアドバイス]"」
    - ボールを開発者に返すため、PRのラベルから「agent:review」を剥がし、代わりに **「agent:dev」** を付与してください。
-     コマンド例: 「gh pr edit ${pr.number} --add-label \"agent:dev\" --remove-label \"agent:review\"」
+     コマンド例: 「gh pr edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
 
 2. **問題ない場合 (Passed)**:
    - 全てのチェックが合格した場合、PRにApproveコメントを投稿してください。
-     コマンド例: 「gh pr review ${pr.number} --approve --body \"一般レビュー結果問題ありませんでした。パスします。\"」
+     コマンド例: 「gh pr review ${pr.number} --approve --body "一般レビュー結果問題ありませんでした。パスします。"」
    - ※意味的・設計規約レビューエージェント（Claude）からも同様にApproveが得られた時点で、次の検証フェーズ（agent:qa）へ移行します。ここでは単純にApproveを表明して終了してください。
 `;
   }

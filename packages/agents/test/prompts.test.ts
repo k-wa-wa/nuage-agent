@@ -1,13 +1,9 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
-import { 
-  SpecAgent, 
-  DevAgent, 
-  ReviewGeneralAgent,
-  AgentContext
-} from '../src/index.js';
+import type { AgentContext } from '../src/index.js';
+import { SpecAgent, DevAgent, ReviewGeneralAgent } from '../src/index.js';
 
-test('SpecAgent compiles prompt with correct metadata', () => {
+void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
   const context: AgentContext = {
     repoName: 'pechka',
@@ -20,9 +16,9 @@ test('SpecAgent compiles prompt with correct metadata', () => {
       labels: ['agent:spec'],
       user: 'alice',
       createdAt: '',
-      updatedAt: ''
+      updatedAt: '',
     },
-    commentsMarkdown: 'User: Yes, with email/password.'
+    commentsMarkdown: 'User: Yes, with email/password.',
   };
 
   const prompt = agent.buildPrompt(context);
@@ -36,7 +32,7 @@ test('SpecAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /gh issue edit 123/);
 });
 
-test('DevAgent compiles prompt with correct metadata', () => {
+void test('DevAgent compiles prompt with correct metadata', () => {
   const agent = new DevAgent();
   const context: AgentContext = {
     repoName: 'nuage-cluster',
@@ -49,8 +45,8 @@ test('DevAgent compiles prompt with correct metadata', () => {
       labels: ['agent:dev'],
       user: 'bob',
       createdAt: '',
-      updatedAt: ''
-    }
+      updatedAt: '',
+    },
   };
 
   const prompt = agent.buildPrompt(context);
@@ -62,7 +58,7 @@ test('DevAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /feature\/issue-456/);
 });
 
-test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
+void test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
   const agent = new ReviewGeneralAgent();
   const context: AgentContext = {
     repoName: 'nuage-cluster',
@@ -77,8 +73,8 @@ test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
       baseBranch: 'main',
       merged: false,
       createdAt: '',
-      updatedAt: ''
-    }
+      updatedAt: '',
+    },
   };
 
   const prompt = agent.buildPrompt(context);

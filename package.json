@@ -2,19 +2,29 @@
   "name": "nuage-agent-root",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Orchestrator for automated development workflows using LLM CLIs and GitHub Issues.",
   "scripts": {
     "dev:runner": "pnpm --filter agent-runner dev",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "build:ci": "pnpm build && pnpm lint && pnpm format:check",
+    "lint": "eslint \"**/*.ts\"",
+    "lint:fix": "eslint \"**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
+    "test": "pnpm -r test",
     "sandbox:setup": "bash scripts/setup-sandbox.sh",
     "sandbox:run": "pnpm build && pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox",
     "labels:create": "pnpm --filter agent-runner labels:create"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.2",
+    "eslint": "^10.5.0",
+    "eslint-plugin-jsdoc": "^63.0.2",
+    "eslint-plugin-tsdoc": "^0.5.2",
     "prettier": "^3.4.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.61.0"
   }
 }

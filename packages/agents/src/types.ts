@@ -1,4 +1,4 @@
-import { GitHubIssue, GitHubPullRequest } from '@nuage-agent/core';
+import type { GitHubIssue, GitHubPullRequest } from '@nuage-agent/core';
 
 export interface AgentContext {
   repoName: string;
@@ -15,7 +15,9 @@ export interface Agent {
   readonly commandType: 'claude' | 'gemini';
 
   /**
-   * エージェント実行のためのシステム・指示プロンプトを組み立てます。
+   * @what エージェント実行のためのシステム・指示プロンプトをコンテキスト情報から組み立てます。
+   * @why 各エージェント（spec, dev, review等）が固有のロールプレイングプロンプトを持てるよう、
+   *      コンテキスト（Issue/PR/リポジトリ情報）を注入してLLMへの指示文を生成するため。
    */
   buildPrompt(context: AgentContext): string;
 }

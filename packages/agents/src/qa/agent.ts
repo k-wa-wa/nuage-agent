@@ -1,4 +1,4 @@
-import { Agent, AgentContext } from '../types.js';
+import type { Agent, AgentContext } from '../types.js';
 
 /**
  * @what マージ前の最終検証を行うQAエージェント（QAAgent）としての指示プロンプトを構築します。

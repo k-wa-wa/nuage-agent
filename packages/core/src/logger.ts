@@ -27,5 +27,5 @@ export const logger = {
       const ctx = context ? `[${context}] ` : '';
       console.log(`\x1b[90m%s\x1b[0m`, `[DEBUG] ${ctx}${message}`);
     }
-  }
+  },
 };

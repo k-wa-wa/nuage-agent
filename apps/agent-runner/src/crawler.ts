@@ -1,21 +1,23 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { 
-  AppConfig, 
-  logger, 
-  runCommand 
-} from '@nuage-agent/core';
-import { agentsList, Agent, AgentContext } from '@nuage-agent/agents';
-import { 
-  getIssuesWithLabel, 
-  getIssueComments, 
+import type { AppConfig } from '@nuage-agent/core';
+import { logger, runCommand } from '@nuage-agent/core';
+import type { Agent, AgentContext } from '@nuage-agent/agents';
+import { agentsList } from '@nuage-agent/agents';
+import {
+  getIssuesWithLabel,
+  getIssueComments,
   updateIssueLabels,
   getPullRequestsWithLabel,
   updatePullRequestLabels,
-  getViewerLogin
+  getViewerLogin,
 } from './github-client.js';
 import { ensureWorkspace } from './workspace.js';
 
+/**
+ * @what 監視対象リポジトリ群を定期ポーリングし、agent:* ラベルをトリガーに適切なエージェントを呼び出すクローラークラスです。
+ * @why Issue/PRに付与されたラベル状態を検出して各フェーズ（spec→dev→review→qa）の自律エージェントを実行することで、人闓介なしに開発パイプラインを自動化するため。
+ */
 export class PipelineCrawler {
   private config: AppConfig;
   private isRunning = false;
@@ -24,8 +26,8 @@ export class PipelineCrawler {
     this.config = {
       ...config,
       claudeCommand: config.claudeCommand.startsWith('~/')
-        ? config.claudeCommand.replace('~', process.env.HOME || '')
-        : config.claudeCommand
+        ? config.claudeCommand.replace('~', process.env.HOME ?? '')
+        : config.claudeCommand,
     };
   }
 
@@ -34,7 +36,7 @@ export class PipelineCrawler {
    * @why エージェント（Claude Code 等）がコードを修正する前に、対象 codebase の全体ディレクトリ構成や規約、コンパイルルールなどをコンテキストに結合して賢く判断させるため。
    */
   private getRepoMapMd(repo: string): string {
-    const repoFolder = repo.split('/').pop() || repo;
+    const repoFolder = repo.split('/').pop() ?? repo;
     const mdPath = path.join(this.config.repoMapDir, `${repoFolder}.md`);
 
     if (fs.existsSync(mdPath)) {
@@ -62,7 +64,7 @@ export class PipelineCrawler {
     try {
       for (const repo of this.config.repositories) {
         logger.info(`Checking repository: ${repo}`, 'crawler');
-        
+
         // Resolve 'agent:wait' locks if there are new user comments
         await this.handleWaitingIssues(repo);
 
@@ -97,10 +99,17 @@ export class PipelineCrawler {
     const issues = await getIssuesWithLabel(repo, agent.label);
 
     for (const issue of issues) {
-      if (issue.labels.includes('agent:running')) continue;
-      if (issue.labels.includes('agent:wait')) continue;
+      if (issue.labels.includes('agent:running')) {
+        continue;
+      }
+      if (issue.labels.includes('agent:wait')) {
+        continue;
+      }
 
-      logger.info(`Found Issue #${issue.number} for Agent ${agent.id}: "${issue.title}"`, 'crawler');
+      logger.info(
+        `Found Issue #${issue.number} for Agent ${agent.id}: "${issue.title}"`,
+        'crawler',
+      );
 
       // Lock the issue
       await updateIssueLabels(repo, issue.number, ['agent:running'], []);
@@ -113,7 +122,7 @@ export class PipelineCrawler {
         if (agent.id === 'spec') {
           const comments = await getIssueComments(repo, issue.number);
           commentsMarkdown = comments
-            .map((c: any) => `[${c.user} - ${c.createdAt}]: ${c.body}`)
+            .map((c) => `[${c.user} - ${c.createdAt}]: ${c.body}`)
             .join('\n\n');
         }
 
@@ -121,7 +130,7 @@ export class PipelineCrawler {
           repoName: repo,
           repoMapMd,
           issue,
-          commentsMarkdown
+          commentsMarkdown,
         };
 
         const prompt = agent.buildPrompt(context);
@@ -129,7 +138,11 @@ export class PipelineCrawler {
         // Execute CLI
         await this.executeAgentCLI(agent, prompt, workspacePath);
       } catch (error) {
-        logger.error(`Error executing Agent ${agent.id} on Issue #${issue.number}`, 'crawler', error);
+        logger.error(
+          `Error executing Agent ${agent.id} on Issue #${issue.number}`,
+          'crawler',
+          error,
+        );
       } finally {
         // Unlock the issue
         await updateIssueLabels(repo, issue.number, [], ['agent:running']);
@@ -145,7 +158,9 @@ export class PipelineCrawler {
     const prs = await getPullRequestsWithLabel(repo, agent.label);
 
     for (const pr of prs) {
-      if (pr.labels.includes('agent:running')) continue;
+      if (pr.labels.includes('agent:running')) {
+        continue;
+      }
 
       logger.info(`Found PR #${pr.number} for Agent ${agent.id}: "${pr.title}"`, 'crawler');
 
@@ -159,7 +174,7 @@ export class PipelineCrawler {
         const context: AgentContext = {
           repoName: repo,
           repoMapMd,
-          pr
+          pr,
         };
 
         const prompt = agent.buildPrompt(context);
@@ -179,23 +194,24 @@ export class PipelineCrawler {
    * @what 指定されたエージェントの指示プロンプトを標準入力（stdin）経由で LLM CLI（Claude/Gemini）に流し込み、実行を開始します。
    * @why 複数行に及ぶプロンプトを引数のシェルエスケープ問題を完全に回避しつつ安全に引き渡し、さらに進捗出力をリアルタイムでユーザーのコンソールにストリームするため。
    */
-  private async executeAgentCLI(agent: Agent, prompt: string, workspacePath: string): Promise<void> {
+  private async executeAgentCLI(
+    agent: Agent,
+    prompt: string,
+    workspacePath: string,
+  ): Promise<void> {
     const isClaude = agent.commandType === 'claude';
     const cmd = isClaude ? this.config.claudeCommand : this.config.geminiCommand;
     const flags = isClaude ? this.config.claudeFlags : this.config.geminiFlags;
 
     logger.info(`Invoking CLI (${agent.commandType}) for Agent: ${agent.id}...`, 'crawler');
 
-    const runnerArgs = [
-      ...flags,
-      isClaude ? '-p' : ''
-    ].filter(arg => arg !== '');
+    const runnerArgs = [...flags, isClaude ? '-p' : ''].filter((arg) => arg !== '');
 
     const result = await runCommand({
       cmd,
       args: runnerArgs,
       cwd: workspacePath,
-      stdin: prompt
+      stdin: prompt,
     });
 
     logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
@@ -209,7 +225,9 @@ export class PipelineCrawler {
     const prs = await getPullRequestsWithLabel(repo, 'agent:review');
 
     for (const pr of prs) {
-      if (pr.labels.includes('agent:running')) continue;
+      if (pr.labels.includes('agent:running')) {
+        continue;
+      }
 
       // Query PR review comments / statuses
       // For now, check if reviewers left approval comments (meaning no further actions)
@@ -217,8 +235,12 @@ export class PipelineCrawler {
       const botUser = await getViewerLogin();
 
       // Check if both general and semantic reviewers approved
-      const hasGeneralPassed = comments.some(c => c.user === botUser && c.body.includes('[General Review Result: PASSED]'));
-      const hasSemanticPassed = comments.some(c => c.user === botUser && c.body.includes('[Semantic Review Result: PASSED]'));
+      const hasGeneralPassed = comments.some(
+        (c) => c.user === botUser && c.body.includes('[General Review Result: PASSED]'),
+      );
+      const hasSemanticPassed = comments.some(
+        (c) => c.user === botUser && c.body.includes('[Semantic Review Result: PASSED]'),
+      );
 
       if (hasGeneralPassed && hasSemanticPassed) {
         logger.info(`PR #${pr.number} passed all review checks. Elevating to QA phase.`, 'crawler');
@@ -233,7 +255,9 @@ export class PipelineCrawler {
    */
   private async handleWaitingIssues(repo: string): Promise<void> {
     const waitingIssues = await getIssuesWithLabel(repo, 'agent:wait');
-    if (waitingIssues.length === 0) return;
+    if (waitingIssues.length === 0) {
+      return;
+    }
 
     const currentBotUser = await getViewerLogin();
 
@@ -243,7 +267,10 @@ export class PipelineCrawler {
         const latestComment = comments[comments.length - 1];
         // If someone else (user or another bot) commented, remove the wait label to resume pipeline
         if (latestComment.user !== currentBotUser) {
-          logger.info(`Detected new comment from user/other-bot on Issue #${issue.number}. Removing 'agent:wait' label.`, 'crawler');
+          logger.info(
+            `Detected new comment from user/other-bot on Issue #${issue.number}. Removing 'agent:wait' label.`,
+            'crawler',
+          );
           await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
         }
       }

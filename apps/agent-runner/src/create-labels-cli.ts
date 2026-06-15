@@ -30,7 +30,7 @@ async function main() {
   logger.info('Pipeline label creator completed.', 'labels-cli');
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   logger.error('Fatal error in pipeline label creator', 'labels-cli', error);
   process.exit(1);
 });

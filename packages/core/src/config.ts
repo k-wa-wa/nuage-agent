@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { AppConfig } from './types.js';
+import type { AppConfig } from './types.js';
 import { logger } from './logger.js';
 
 // --- SYSTEM STATIC CONSTANTS ---
@@ -37,7 +37,9 @@ function parseYamlRepositories(content: string): string[] {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
 
     // Detect repositories block
     if (trimmed.startsWith('repositories:')) {
@@ -82,15 +84,15 @@ export function loadConfig(): AppConfig {
   if (repoMapDirIndex === -1 || !args[repoMapDirIndex + 1]) {
     throw new Error(
       'Error: --repo-map-dir (または -d) パラメータは必須です。デフォルト値はありません。\n' +
-      '実行例:\n' +
-      '  pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox\n' +
-      '  pnpm dev:runner -- --repo-map-dir ./repo-map/production'
+        '実行例:\n' +
+        '  pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox\n' +
+        '  pnpm dev:runner -- --repo-map-dir ./repo-map/production',
     );
   }
 
   const repoMapDir = args[repoMapDirIndex + 1];
-  const resolvedRepoMapDir = path.isAbsolute(repoMapDir) 
-    ? repoMapDir 
+  const resolvedRepoMapDir = path.isAbsolute(repoMapDir)
+    ? repoMapDir
     : path.resolve(rootDir, repoMapDir);
 
   if (!fs.existsSync(resolvedRepoMapDir)) {
@@ -124,6 +126,8 @@ export function loadConfig(): AppConfig {
       workspacesDir: path.resolve(rootDir, DEFAULT_WORKSPACES_DIR_NAME),
     };
   } catch (error) {
-    throw new Error(`Failed to load and parse repo-map configuration: ${(error as Error).message}`);
+    throw new Error(`Failed to load and parse repo-map configuration: ${String(error)}`, {
+      cause: error,
+    });
   }
 }

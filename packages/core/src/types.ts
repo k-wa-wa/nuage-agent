@@ -2,7 +2,7 @@ export type AgentType = 'spec' | 'dev' | 'review' | 'qa' | 'triage';
 
 export interface AppConfig {
   repositories: string[]; // YAMLから読み込まれるリポジトリリスト
-  repoMapDir: string;     // repo-mapディレクトリへのパス
+  repoMapDir: string; // repo-mapディレクトリへのパス
   pollingIntervalSeconds: number;
   claudeCommand: string;
   claudeFlags: string[];

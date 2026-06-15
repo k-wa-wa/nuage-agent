@@ -10,12 +10,12 @@ import { DevAgent } from './dev/agent.js';
 import { ReviewGeneralAgent } from './review-general/agent.js';
 import { ReviewSemanticAgent } from './review-semantic/agent.js';
 import { QAAgent } from './qa/agent.js';
-import { Agent } from './types.js';
+import type { Agent } from './types.js';
 
 export const agentsList: Agent[] = [
   new SpecAgent(),
   new DevAgent(),
   new ReviewGeneralAgent(),
   new ReviewSemanticAgent(),
-  new QAAgent()
+  new QAAgent(),
 ];
