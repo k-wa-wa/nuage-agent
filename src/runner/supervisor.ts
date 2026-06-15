@@ -148,17 +148,52 @@ export class PipelineSupervisor {
       title: string;
       labels: { name: string }[];
     }
+    interface RawPRSummary {
+      number: number;
+      title: string;
+      body: string;
+      headRefName: string;
+    }
     try {
       // Fetch open issues from the last 100 entries
       const cmd = `gh issue list --repo "${repo}" --limit 100 --json number,title,labels`;
       const output = await execCommand(cmd);
       const issues = JSON.parse(output) as RawIssueSummary[];
 
+      // Fetch open pull requests to check for linked issues
+      const prCmd = `gh pr list --repo "${repo}" --limit 100 --json number,title,body,headRefName`;
+      let prs: RawPRSummary[] = [];
+      try {
+        const prOutput = await execCommand(prCmd);
+        prs = JSON.parse(prOutput) as RawPRSummary[];
+      } catch (prError) {
+        logger.error(`Failed to fetch pull requests in ${repo}`, 'supervisor', prError);
+      }
+
       for (const item of issues) {
         const labels = item.labels.map((l) => l.name);
         const hasAgentLabel = labels.some((l) => l.startsWith('agent:'));
 
         if (!hasAgentLabel) {
+          // Check if there is an active PR referencing this issue
+          const hasActivePR = prs.some((pr) => {
+            const issueRefRegex = new RegExp(`\\b#${item.number}\\b`);
+            const branchNameRef = `issue-${item.number}`;
+            return (
+              issueRefRegex.test(pr.title) ||
+              issueRefRegex.test(pr.body || '') ||
+              pr.headRefName.includes(branchNameRef)
+            );
+          });
+
+          if (hasActivePR) {
+            logger.info(
+              `Issue #${item.number} has no agent:* labels but has active PR referencing it. Skipping auto-assigning agent:spec.`,
+              'supervisor',
+            );
+            continue;
+          }
+
           logger.info(
             `Unlabeled Issue #${item.number} found. Assigning agent:spec...`,
             'supervisor',

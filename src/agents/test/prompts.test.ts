@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
 import type { AgentContext } from '../index.js';
-import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent } from '../index.js';
+import { SpecAgent, DevAgent, DevPRAgent, ReviewGeneralAgent, QAAgent } from '../index.js';
 
 void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
@@ -111,4 +111,32 @@ void test('QAAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /Pull Request #999/);
   assert.match(prompt, /gh pr checkout 999/);
   assert.match(prompt, /gh issue edit 999 --remove-label "agent:qa"/);
+});
+
+void test('DevPRAgent compiles prompt with correct metadata', () => {
+  const agent = new DevPRAgent();
+  const context: AgentContext = {
+    repoName: 'nuage-cluster',
+    repoMapMd: '## Dev Rules',
+    pr: {
+      number: 888,
+      title: 'Fix issue with tests',
+      body: 'Rename test dir.',
+      state: 'open',
+      labels: ['agent:dev'],
+      branch: 'feature/issue-2',
+      baseBranch: 'main',
+      merged: false,
+      createdAt: '',
+      updatedAt: '',
+    },
+  };
+
+  const prompt = agent.buildPrompt(context);
+
+  assert.match(prompt, /PR修正担当/);
+  assert.match(prompt, /nuage-cluster/);
+  assert.match(prompt, /Pull Request #888/);
+  assert.match(prompt, /gh pr checkout 888/);
+  assert.match(prompt, /gh issue edit 888 --add-label "agent:review" --remove-label "agent:dev"/);
 });
