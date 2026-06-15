@@ -14,7 +14,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
     "test": "node --import tsx --test src/**/*.test.ts",
     "sandbox:setup": "bash scripts/setup-sandbox.sh",
-    "sandbox:run": "pnpm build && pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox",
+    "sandbox:run": "pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox",
     "labels:create": "tsx src/runner/create-labels-cli.ts"
   },
   "devDependencies": {
