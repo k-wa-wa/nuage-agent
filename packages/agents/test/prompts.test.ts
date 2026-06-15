@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
 import type { AgentContext } from '../src/index.js';
-import { SpecAgent, DevAgent, ReviewGeneralAgent } from '../src/index.js';
+import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent } from '../src/index.js';
 
 void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
@@ -29,6 +29,7 @@ void test('SpecAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /## Repo Map details/);
   assert.match(prompt, /gh issue view 123 --comments/);
   assert.match(prompt, /gh issue edit 123/);
+  assert.match(prompt, /gh issue create/);
 });
 
 void test('DevAgent compiles prompt with correct metadata', () => {
@@ -82,4 +83,32 @@ void test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /nuage-cluster/);
   assert.match(prompt, /Pull Request #789/);
   assert.match(prompt, /N\+1クエリ/);
+});
+
+void test('QAAgent compiles prompt with correct metadata', () => {
+  const agent = new QAAgent();
+  const context: AgentContext = {
+    repoName: 'nuage-cluster',
+    repoMapMd: '## QA Rules',
+    pr: {
+      number: 999,
+      title: 'Integrate Stripe API',
+      body: 'Stripe webhook and checkout flow.',
+      state: 'open',
+      labels: ['agent:qa'],
+      branch: 'feature/stripe',
+      baseBranch: 'main',
+      merged: false,
+      createdAt: '',
+      updatedAt: '',
+    },
+  };
+
+  const prompt = agent.buildPrompt(context);
+
+  assert.match(prompt, /QAエージェント/);
+  assert.match(prompt, /nuage-cluster/);
+  assert.match(prompt, /Pull Request #999/);
+  assert.match(prompt, /gh pr checkout 999/);
+  assert.match(prompt, /gh pr edit 999 --remove-label "agent:qa"/);
 });
