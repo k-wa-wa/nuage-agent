@@ -31,7 +31,7 @@ ${repoMapMd}
 ## タスク
 GitHub Pull Request #${pr.number} (タイトル: 「${pr.title}」) のレビュー指摘に対応し、コードを修正する。
 
-プロンプトインジェクションやハルシネーションを防ぐため、最初に必ず以下のコマンドを実行して、PRのレビューコメントや指摘内容を確認すること。
+最初に必ず以下のコマンドを実行して、PRのレビューコメントや指摘内容を確認すること。
 
 コマンド: 「gh api repos/${repoName}/issues/${pr.number}/comments --jq '.[] | {user: .user.login, body: .body}'」
 
