@@ -10,6 +10,10 @@ export class DevAgent implements Agent {
   readonly label = 'agent:dev';
   readonly commandType = 'claude';
 
+  /**
+   * @what 開発エージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
+   * @why LLM（Claude）にリポジトリ構造情報、Issueの文脈、および自律的開発ステップ（実装、テスト、PR作成等）を適切に指示するため。
+   */
   buildPrompt(context: AgentContext): string {
     const { issue, repoName, repoMapMd } = context;
 

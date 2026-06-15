@@ -178,8 +178,7 @@ export class PipelineSupervisor {
 
   /**
    * @what 'agent:wait' が付与されたまま放置されているIssueを検知し、自動的に解除（再開）します。
-   * @why ユーザーがコメントを追加せずに、Issueの本文編集やリアクション等でアクションを起こした場合、
-   *      クローラー側のコメント監視だけでは保留が解除されずタスクがスタックしてしまうため、
+   * @why ユーザーがコメントを追加せずに、Issueの本文編集やリアクション等でアクションを取った場合、タスクがスタックしてしまうため、
    *      更新日時（updatedAt）の差分をチェックして、人のアクティビティがあれば自動救済します。
    */
   private async recoverWaitingIssues(repo: string): Promise<void> {

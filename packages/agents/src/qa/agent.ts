@@ -10,6 +10,10 @@ export class QAAgent implements Agent {
   readonly label = 'agent:qa';
   readonly commandType = 'claude';
 
+  /**
+   * @what QAエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
+   * @why LLM（Claude）に、PRのチェックアウト、検証テスト実行、テスト成功時のマージ、失敗時の開発者差し戻し処理を正しく指示するため。
+   */
   buildPrompt(context: AgentContext): string {
     const { pr, repoName } = context;
 

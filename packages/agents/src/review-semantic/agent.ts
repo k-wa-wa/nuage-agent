@@ -10,6 +10,10 @@ export class ReviewSemanticAgent implements Agent {
   readonly label = 'agent:review';
   readonly commandType = 'claude';
 
+  /**
+   * @what 意味的/設計規約レビューエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
+   * @why LLM（Claude）に設計ガイドラインやディレクトリ構造、ドキュメントの同期、破壊的変更チェックを含むPRレビューを指示するため。
+   */
   buildPrompt(context: AgentContext): string {
     const { pr, repoName, repoMapMd } = context;
 

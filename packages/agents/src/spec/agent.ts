@@ -10,6 +10,10 @@ export class SpecAgent implements Agent {
   readonly label = 'agent:spec';
   readonly commandType = 'claude';
 
+  /**
+   * @what 仕様定義エージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
+   * @why LLM（Claude）に、ユーザーからの新規課題に対して壁打ち質問を行い、受け入れ基準と仕様を確定させて次のフェーズへ引き渡す指示をするため。
+   */
   buildPrompt(context: AgentContext): string {
     const { issue, commentsMarkdown, repoName, repoMapMd } = context;
 

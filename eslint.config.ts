@@ -1,14 +1,13 @@
-// @ts-check
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import tsdocPlugin from 'eslint-plugin-tsdoc';
 import jsdocPlugin from 'eslint-plugin-jsdoc';
-import requireWhatWhy from './tools/eslint-rules/require-what-why.js';
+import requireWhatWhy from './tools/eslint-rules/require-what-why.ts';
 
 export default tseslint.config(
   // ── global ignores ────────────────────────────────────────────────────
   {
-    ignores: ['**/dist/**', '**/node_modules/**', 'eslint.config.js'],
+    ignores: ['**/dist/**', '**/node_modules/**', 'eslint.config.js', 'eslint.config.ts'],
   },
 
   // ── JS baseline ───────────────────────────────────────────────────────

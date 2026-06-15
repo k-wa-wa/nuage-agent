@@ -10,6 +10,10 @@ export class ReviewGeneralAgent implements Agent {
   readonly label = 'agent:review';
   readonly commandType = 'gemini';
 
+  /**
+   * @what 一般レビューエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
+   * @why LLM（Gemini）にバグ、エラー、セキュリティやパフォーマンス観点でのPRレビューと合否判定を指示するため。
+   */
   buildPrompt(context: AgentContext): string {
     const { pr, repoName, repoMapMd } = context;
 
