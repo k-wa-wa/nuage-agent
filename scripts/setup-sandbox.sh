@@ -49,14 +49,15 @@ else
 fi
 
 # Create test issue
-ISSUE_TITLE="[Feature] Add sum function"
+ISSUE_TITLE="[機能追加] 2つの数値の合計を計算するsum関数の実装"
 ISSUE_BODY=$(cat <<EOF
-Please implement a sum function in a new file \`src/math.ts\` and write a test for it in \`test/math.test.ts\`.
-The function should take two numbers and return their sum.
+新規ファイル \`src/math.ts\` に、2つの引数を受け取ってその合計を返す \`sum\` 関数を実装してください。
+また、その関数のユニットテストを \`test/math.test.ts\` に作成してください。
 
-Ensure the project compiles and we can test it locally.
+プロジェクトが正常にビルドでき、ローカルでテストが実行・通過することを確認してください。
 EOF
 )
+
 
 echo "Checking for existing test issue..."
 EXISTING_ISSUE=$(gh issue list --repo "$REPO" --search "$ISSUE_TITLE" --json number --jq '.[0].number' 2>/dev/null || true)
