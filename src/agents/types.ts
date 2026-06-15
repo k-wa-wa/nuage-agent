@@ -1,4 +1,4 @@
-import type { GitHubIssue, GitHubPullRequest } from '@nuage-agent/core';
+import type { GitHubIssue, GitHubPullRequest } from '../core/index.js';
 
 export interface AgentContext {
   repoName: string;

@@ -1,5 +1,5 @@
-import type { AppConfig } from '@nuage-agent/core';
-import { logger } from '@nuage-agent/core';
+import type { AppConfig } from '../core/index.js';
+import { logger } from '../core/index.js';
 import {
   getIssuesWithLabel,
   updateIssueLabels,

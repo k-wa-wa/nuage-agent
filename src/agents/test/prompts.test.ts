@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
-import type { AgentContext } from '../src/index.js';
-import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent } from '../src/index.js';
+import type { AgentContext } from '../index.js';
+import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent } from '../index.js';
 
 void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();

@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import type { AppConfig } from '@nuage-agent/core';
-import { logger } from '@nuage-agent/core';
+import type { AppConfig } from '../core/index.js';
+import { logger } from '../core/index.js';
 
 /**
  * @what 対象リポジトリを `workspaces/` 配下にローカルクローンし、最新の `main` / `master` ブランチを取得して常に同期します。

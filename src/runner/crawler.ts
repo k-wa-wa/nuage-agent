@@ -1,9 +1,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import type { AppConfig } from '@nuage-agent/core';
-import { logger, runCommand } from '@nuage-agent/core';
-import type { Agent, AgentContext } from '@nuage-agent/agents';
-import { agentsList } from '@nuage-agent/agents';
+import type { AppConfig } from '../core/index.js';
+import { logger, runCommand } from '../core/index.js';
+import type { Agent, AgentContext } from '../agents/index.js';
+import { agentsList } from '../agents/index.js';
 import {
   getIssuesWithLabel,
   getIssueComments,

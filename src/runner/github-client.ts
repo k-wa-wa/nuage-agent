@@ -1,6 +1,6 @@
 import { exec } from 'child_process';
-import type { GitHubIssue, GitHubComment, GitHubPullRequest } from '@nuage-agent/core';
-import { logger } from '@nuage-agent/core';
+import type { GitHubIssue, GitHubComment, GitHubPullRequest } from '../core/index.js';
+import { logger } from '../core/index.js';
 
 // Raw shapes returned by the GitHub CLI (gh) JSON output.
 // These are internal to this module; consumers use the GitHubIssue/Comment/PR types.

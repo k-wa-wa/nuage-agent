@@ -1,4 +1,4 @@
-import { loadConfig, logger } from '@nuage-agent/core';
+import { loadConfig, logger } from '../core/index.js';
 import { PipelineCrawler } from './crawler.js';
 import { PipelineSupervisor } from './supervisor.js';
 

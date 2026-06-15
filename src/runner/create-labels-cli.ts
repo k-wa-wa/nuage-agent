@@ -1,4 +1,4 @@
-import { loadConfig, logger } from '@nuage-agent/core';
+import { loadConfig, logger } from '../core/index.js';
 import { ensureLabelsExist } from './github-client.js';
 
 /**
