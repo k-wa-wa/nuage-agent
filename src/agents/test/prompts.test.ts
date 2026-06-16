@@ -1,14 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
 import type { AgentContext } from '../index.js';
-import {
-  SpecAgent,
-  DevAgent,
-  DevPRAgent,
-  ReviewGeneralAgent,
-  QAAgent,
-  QAGeneratorAgent,
-} from '../index.js';
+import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent, QAGeneratorAgent } from '../index.js';
 
 void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
@@ -39,8 +32,8 @@ void test('SpecAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /gh issue create/);
 });
 
-void test('DevAgent compiles prompt with correct metadata', () => {
-  const agent = new DevAgent();
+void test('DevAgent (issue) compiles prompt with correct metadata', () => {
+  const agent = new DevAgent('issue');
   const context: AgentContext = {
     repoName: 'nuage-cluster',
     repoMapMd: '## Database Rules',
@@ -151,8 +144,8 @@ void test('QAAgent compiles prompt with correct metadata and auto-merge instruct
   assert.match(prompt, /自動マージを実行します/);
 });
 
-void test('DevPRAgent compiles prompt with correct metadata', () => {
-  const agent = new DevPRAgent();
+void test('DevAgent (pr) compiles prompt with correct metadata', () => {
+  const agent = new DevAgent('pr');
   const context: AgentContext = {
     repoName: 'nuage-cluster',
     repoMapMd: '## Dev Rules',

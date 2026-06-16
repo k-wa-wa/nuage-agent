@@ -17,10 +17,10 @@ import { runIssueAgentTask, runPRAgentTask, runQAGeneratorTask } from './task-ru
 
 /**
  * @what エージェントが並行プールで競合を引き起こすかどうかを判定します。
- * @why テスト実行を行う重いタスク（dev, dev-pr, qa）をシリアルプールに割り当てるため。
+ * @why テスト実行を行う重いタスク（dev, qa）をシリアルプールに割り当てるため。
  */
 function isConflictAgent(agentId: string): boolean {
-  return agentId === 'dev' || agentId === 'dev-pr' || agentId === 'qa';
+  return agentId === 'dev' || agentId === 'qa';
 }
 
 /**
