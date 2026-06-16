@@ -1,6 +1,7 @@
 import { loadConfig, logger } from '../core/index.js';
 import { PipelineCrawler } from './crawler.js';
 import { PipelineSupervisor } from './supervisor.js';
+import { registerShutdownHandlers } from './pool.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -9,6 +10,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * @why コマンドライン引数を読み込み、Supervisor監視とクローラー監視の2つの役割（状態チェックおよびフリーズ復旧）を順次または無限ループで実行し続けるため。
  */
 async function main() {
+  registerShutdownHandlers();
   logger.info('Initializing nuage-agent runner...', 'main');
 
   let config;

@@ -430,3 +430,89 @@ export async function getRecentIssues(
     return [];
   }
 }
+
+/**
+ * @what 指定したリポジトリから、オープン状態のIssueを最大100件一括で取得します。
+ * @why クローラーの定期巡回時のGitHub APIコール数を削減するため。
+ */
+export async function getAllOpenIssues(repo: string): Promise<GitHubIssue[]> {
+  try {
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'issue',
+        'list',
+        '--repo',
+        repo,
+        '--state',
+        'open',
+        '--limit',
+        '100',
+        '--json',
+        'number,title,body,state,labels,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    const parsed = JSON.parse(result.stdout) as RawGHIssue[];
+    return parsed.map((item) => ({
+      number: item.number,
+      title: item.title,
+      body: item.body,
+      state: item.state.toLowerCase() as 'open' | 'closed',
+      labels: item.labels.map((l) => l.name),
+      user: '',
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+  } catch (error) {
+    logger.error(`Failed to get all open issues from ${repo}`, 'github-client', error);
+    return [];
+  }
+}
+
+/**
+ * @what 指定したリポジトリから、オープン状態のPull Requestを最大100件一括で取得します。
+ * @why クローラーの定期巡回時のGitHub APIコール数を削減するため。
+ */
+export async function getAllOpenPRs(repo: string): Promise<GitHubPullRequest[]> {
+  try {
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'pr',
+        'list',
+        '--repo',
+        repo,
+        '--state',
+        'open',
+        '--limit',
+        '100',
+        '--json',
+        'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    const parsed = JSON.parse(result.stdout) as RawGHPR[];
+    return parsed.map((item) => ({
+      number: item.number,
+      title: item.title,
+      body: item.body,
+      state: item.state.toLowerCase() as 'open' | 'closed',
+      labels: item.labels.map((l) => l.name),
+      branch: item.headRefName,
+      baseBranch: item.baseRefName,
+      merged: item.state.toLowerCase() === 'merged',
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+  } catch (error) {
+    logger.error(`Failed to get all open PRs from ${repo}`, 'github-client', error);
+    return [];
+  }
+}

@@ -11,9 +11,12 @@ export const logger = {
     const ctx = context ? `[${context}] ` : '';
     console.log(`\x1b[32m%s\x1b[0m`, `✔ ${ctx}${message}`);
   },
-  warn(message: string, context?: string) {
+  warn(message: string, context?: string, error?: unknown) {
     const ctx = context ? `[${context}] ` : '';
     console.warn(`\x1b[33m%s\x1b[0m`, `⚠ ${ctx}${message}`);
+    if (error) {
+      console.warn(error);
+    }
   },
   error(message: string, context?: string, error?: unknown) {
     const ctx = context ? `[${context}] ` : '';

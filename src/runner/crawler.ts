@@ -1,25 +1,36 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import type { AppConfig } from '../core/index.js';
+import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
 import type { Agent, AgentContext } from '../agents/index.js';
 import { agentsList, QAGeneratorAgent } from '../agents/index.js';
 import {
-  getIssuesWithLabel,
   getIssueComments,
   updateIssueLabels,
-  getPullRequestsWithLabel,
   updatePullRequestLabels,
   getViewerLogin,
   getIssue,
   getPullRequest,
   getRecentIssues,
+  getAllOpenIssues,
+  getAllOpenPRs,
 } from './github-client.js';
-import { ensureWorkspace } from './workspace.js';
+import { setupWorktree, cleanupWorktree } from './workspace.js';
+import {
+  conflictPool,
+  nonConflictPool,
+  isTaskActive,
+  addTaskActive,
+  removeTaskActive,
+} from './pool.js';
+
+function isConflictAgent(agentId: string): boolean {
+  return agentId === 'dev' || agentId === 'dev-pr' || agentId === 'qa';
+}
 
 /**
- * @what 監視対象リポジトリ群を定期ポーリングし、agent:* ラベルをトリガーに適切なエージェントを呼び出すクローラークラスです。
- * @why Issue/PRに付与されたラベル状態を検出して各フェーズ（spec→dev→review→qa）の自律エージェントを実行することで、人闓介なしに開発パイプラインを自動化するため。
+ * @what 監視対象リポジトリ群を定期ポーリングし、agent:* ラベルをトリガーに適切なエージェントを並行して呼び出すクローラークラスです。
+ * @why 各フェーズ（spec→dev→review→qa）の自律エージェントを、ポート競合の有無に基づいた並行プールに振り分けて効率的に実行するため。
  */
 export class PipelineCrawler {
   private config: AppConfig;
@@ -74,8 +85,12 @@ export class PipelineCrawler {
       for (const repo of this.config.repositories) {
         logger.info(`Checking repository: ${repo}`, 'crawler');
 
+        // Fetch open issues and PRs once per repository
+        const openIssues = await getAllOpenIssues(repo);
+        const openPRs = await getAllOpenPRs(repo);
+
         // Resolve 'agent:wait' locks if there are new user comments
-        await this.handleWaitingIssues(repo);
+        await this.handleWaitingIssues(repo, openIssues);
 
         // Run Proactive QA Generator Agent check
         await this.runProactiveQAGenerator(repo);
@@ -85,16 +100,19 @@ export class PipelineCrawler {
           logger.debug(`Running check for Agent: ${agent.id} (label: ${agent.label})`, 'crawler');
 
           if (agent.targetType === 'issue') {
-            await this.processIssueAgent(repo, agent);
+            this.processIssueAgent(repo, agent, openIssues);
           } else {
-            await this.processPRAgent(repo, agent);
+            this.processPRAgent(repo, agent, openPRs);
           }
         }
 
         // Post-review check: If a PR is labeled 'agent:review' and both reviewers have approved,
         // elevate state to 'agent:qa'
-        await this.postReviewCheck(repo);
+        await this.postReviewCheck(repo, openPRs);
       }
+
+      // Wait for all tasks enqueued in this cycle to complete
+      await Promise.all([conflictPool.waitForCompletion(), nonConflictPool.waitForCompletion()]);
     } catch (error) {
       logger.error('Error during crawl cycle', 'crawler', error);
     } finally {
@@ -110,8 +128,8 @@ export class PipelineCrawler {
    * @what Issue をターゲットとするエージェント（仕様定義・開発）のチェックおよび実行プロセスをハンドリングします。
    * @why `agent:spec` や `agent:dev` ラベルがついた未ロックの課題に対して、リポジトリマップ情報と過去のコメント履歴をプロンプトに組み立て、CLIを起動してタスクを解決するため。
    */
-  private async processIssueAgent(repo: string, agent: Agent): Promise<void> {
-    const issues = await getIssuesWithLabel(repo, agent.label);
+  private processIssueAgent(repo: string, agent: Agent, openIssues: GitHubIssue[]): void {
+    const issues = openIssues.filter((issue) => issue.labels.includes(agent.label));
 
     for (const issue of issues) {
       if (issue.labels.includes('agent:running')) {
@@ -121,86 +139,101 @@ export class PipelineCrawler {
         continue;
       }
 
-      // --- STRICT LOCK CHECK ---
-      // WHY: crawlerの定期ポーリング処理は非同期かつ並列で実行される可能性があり、
-      // 最初に一覧を取得した時点から実際にエージェントを実行してロックをかけるまでの間に
-      // 他のランナーやプロセスによって 'agent:running' が付与されている可能性があります。
-      // 二重実行や処理の競合を防ぐため、ロック獲得直前に最新のIssue情報をGitHubから直接取得し直して、
-      // すでにロック中（またはユーザー返答待ち）になっていないかを厳密に再検証します。
-      const freshIssue = await getIssue(repo, issue.number);
-      if (!freshIssue) {
-        logger.warn(
-          `Skipping Issue #${issue.number} because it could not be fetched fresh.`,
-          'crawler',
-        );
+      const key = `${repo}#${issue.number}-${agent.id}`;
+      if (isTaskActive(key)) {
+        logger.debug(`Task ${key} is already active/queued. Skipping.`, 'crawler');
         continue;
       }
-      if (freshIssue.labels.includes('agent:running')) {
-        logger.info(
-          `Skipping Issue #${issue.number} because it was locked by another process (agent:running detected).`,
-          'crawler',
-        );
-        continue;
-      }
-      if (freshIssue.labels.includes('agent:wait')) {
-        logger.info(
-          `Skipping Issue #${issue.number} because agent:wait was recently added.`,
-          'crawler',
-        );
-        continue;
-      }
-      if (!freshIssue.labels.includes(agent.label)) {
-        logger.info(
-          `Skipping Issue #${issue.number} because the target label "${agent.label}" was removed.`,
-          'crawler',
-        );
-        continue;
-      }
+      addTaskActive(key);
 
-      logger.info(
-        `\n┌────────────────────────────────────────────────────────────────────────────────` +
-          `\n│ >>> Starting Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
-          `\n│     Title: "${issue.title}"` +
-          `\n└────────────────────────────────────────────────────────────────────────────────`,
-        'crawler',
-      );
+      const pool = isConflictAgent(agent.id) ? conflictPool : nonConflictPool;
+      pool.enqueue(async () => {
+        try {
+          // --- STRICT LOCK CHECK ---
+          const freshIssue = await getIssue(repo, issue.number);
+          if (!freshIssue) {
+            logger.warn(
+              `Skipping Issue #${issue.number} because it could not be fetched fresh.`,
+              'crawler',
+            );
+            return;
+          }
+          if (freshIssue.labels.includes('agent:running')) {
+            logger.info(
+              `Skipping Issue #${issue.number} because it was locked by another process (agent:running detected).`,
+              'crawler',
+            );
+            return;
+          }
+          if (freshIssue.labels.includes('agent:wait')) {
+            logger.info(
+              `Skipping Issue #${issue.number} because agent:wait was recently added.`,
+              'crawler',
+            );
+            return;
+          }
+          if (!freshIssue.labels.includes(agent.label)) {
+            logger.info(
+              `Skipping Issue #${issue.number} because the target label "${agent.label}" was removed.`,
+              'crawler',
+            );
+            return;
+          }
 
-      // Lock the issue
-      await updateIssueLabels(repo, issue.number, ['agent:running'], []);
+          logger.info(
+            `\n┌────────────────────────────────────────────────────────────────────────────────` +
+              `\n│ >>> Starting Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
+              `\n│     Title: "${issue.title}"` +
+              `\n└────────────────────────────────────────────────────────────────────────────────`,
+            'crawler',
+          );
 
-      let success = true;
-      try {
-        const workspacePath = ensureWorkspace(repo, this.config);
-        const repoMapMd = this.getRepoMapMd(repo);
+          // Lock the issue
+          await updateIssueLabels(repo, issue.number, ['agent:running'], []);
 
-        const context: AgentContext = {
-          repoName: repo,
-          repoMapMd,
-          issue,
-        };
+          const taskNumber = `${issue.number}-${agent.id}`;
+          const branchName = `agent/issue-${issue.number}`;
+          let workspacePath = '';
+          let success = true;
+          try {
+            workspacePath = setupWorktree(repo, taskNumber, branchName, false, this.config);
+            const repoMapMd = this.getRepoMapMd(repo);
 
-        const prompt = agent.buildPrompt(context);
+            const context: AgentContext = {
+              repoName: repo,
+              repoMapMd,
+              issue,
+            };
 
-        // Execute CLI
-        await this.executeAgentCLI(agent, prompt, workspacePath);
-      } catch (error) {
-        success = false;
-        logger.error(
-          `Error executing Agent ${agent.id} on Issue #${issue.number}`,
-          'crawler',
-          error,
-        );
-      } finally {
-        // Unlock the issue
-        await updateIssueLabels(repo, issue.number, [], ['agent:running']);
-        logger.info(
-          `\n┌────────────────────────────────────────────────────────────────────────────────` +
-            `\n│ <<< Finished Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
-            `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
-            `\n└────────────────────────────────────────────────────────────────────────────────\n`,
-          'crawler',
-        );
-      }
+            const prompt = agent.buildPrompt(context);
+
+            // Execute CLI
+            await this.executeAgentCLI(agent, prompt, workspacePath, taskNumber);
+          } catch (error) {
+            success = false;
+            logger.error(
+              `Error executing Agent ${agent.id} on Issue #${issue.number}`,
+              'crawler',
+              error,
+            );
+          } finally {
+            // Unlock the issue
+            await updateIssueLabels(repo, issue.number, [], ['agent:running']);
+            if (workspacePath) {
+              cleanupWorktree(repo, taskNumber, this.config);
+            }
+            logger.info(
+              `\n┌────────────────────────────────────────────────────────────────────────────────` +
+                `\n│ <<< Finished Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
+                `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
+                `\n└────────────────────────────────────────────────────────────────────────────────\n`,
+              'crawler',
+            );
+          }
+        } finally {
+          removeTaskActive(key);
+        }
+      });
     }
   }
 
@@ -208,81 +241,98 @@ export class PipelineCrawler {
    * @what プルリクエストをターゲットとするエージェント（レビュー、QA）のチェックおよび実行プロセスをハンドリングします。
    * @why 作成されたPRブランチに紐づくコード差分やテスト結果に基づき、レビュー指摘コメントの投稿やQAテストの自動実行を安全なワークスペース上で行うため。
    */
-  private async processPRAgent(repo: string, agent: Agent): Promise<void> {
-    const prs = await getPullRequestsWithLabel(repo, agent.label);
+  private processPRAgent(repo: string, agent: Agent, openPRs: GitHubPullRequest[]): void {
+    const prs = openPRs.filter((pr) => pr.labels.includes(agent.label));
 
     for (const pr of prs) {
       if (pr.labels.includes('agent:running')) {
         continue;
       }
 
-      // --- STRICT LOCK CHECK ---
-      // WHY: crawlerの定期ポーリング処理は非同期かつ並列で実行される可能性があり、
-      // 最初に一覧を取得した時点から実際にエージェントを実行してロックをかけるまでの間に
-      // 他のランナーやプロセスによって 'agent:running' が付与されている可能性があります。
-      // 二重実行や処理の競合を防ぐため、ロック獲得直前に最新 of PR情報をGitHubから直接取得し直して、
-      // すでにロック中（またはユーザー返答待ち）になっていないかを厳密に再検証します。
-      const freshPR = await getPullRequest(repo, pr.number);
-      if (!freshPR) {
-        logger.warn(`Skipping PR #${pr.number} because it could not be fetched fresh.`, 'crawler');
+      const key = `${repo}#${pr.number}-${agent.id}`;
+      if (isTaskActive(key)) {
+        logger.debug(`Task ${key} is already active/queued. Skipping.`, 'crawler');
         continue;
       }
-      if (freshPR.labels.includes('agent:running')) {
-        logger.info(
-          `Skipping PR #${pr.number} because it was locked by another process (agent:running detected).`,
-          'crawler',
-        );
-        continue;
-      }
-      if (!freshPR.labels.includes(agent.label)) {
-        logger.info(
-          `Skipping PR #${pr.number} because the target label "${agent.label}" was removed.`,
-          'crawler',
-        );
-        continue;
-      }
+      addTaskActive(key);
 
-      logger.info(
-        `\n┌────────────────────────────────────────────────────────────────────────────────` +
-          `\n│ >>> Starting Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
-          `\n│     Title: "${pr.title}"` +
-          `\n└────────────────────────────────────────────────────────────────────────────────`,
-        'crawler',
-      );
+      const pool = isConflictAgent(agent.id) ? conflictPool : nonConflictPool;
+      pool.enqueue(async () => {
+        try {
+          // --- STRICT LOCK CHECK ---
+          const freshPR = await getPullRequest(repo, pr.number);
+          if (!freshPR) {
+            logger.warn(
+              `Skipping PR #${pr.number} because it could not be fetched fresh.`,
+              'crawler',
+            );
+            return;
+          }
+          if (freshPR.labels.includes('agent:running')) {
+            logger.info(
+              `Skipping PR #${pr.number} because it was locked by another process (agent:running detected).`,
+              'crawler',
+            );
+            return;
+          }
+          if (!freshPR.labels.includes(agent.label)) {
+            logger.info(
+              `Skipping PR #${pr.number} because the target label "${agent.label}" was removed.`,
+              'crawler',
+            );
+            return;
+          }
 
-      // Lock the PR
-      await updatePullRequestLabels(repo, pr.number, ['agent:running'], []);
+          logger.info(
+            `\n┌────────────────────────────────────────────────────────────────────────────────` +
+              `\n│ >>> Starting Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
+              `\n│     Title: "${pr.title}"` +
+              `\n└────────────────────────────────────────────────────────────────────────────────`,
+            'crawler',
+          );
 
-      let success = true;
-      try {
-        const workspacePath = ensureWorkspace(repo, this.config);
-        const repoMapMd = this.getRepoMapMd(repo);
+          // Lock the PR
+          await updatePullRequestLabels(repo, pr.number, ['agent:running'], []);
 
-        const context: AgentContext = {
-          repoName: repo,
-          repoMapMd,
-          pr,
-          autoMerge: this.config.qaAutoMerge,
-        };
+          const taskNumber = `${pr.number}-${agent.id}`;
+          let workspacePath = '';
+          let success = true;
+          try {
+            workspacePath = setupWorktree(repo, taskNumber, pr.branch, true, this.config);
+            const repoMapMd = this.getRepoMapMd(repo);
 
-        const prompt = agent.buildPrompt(context);
+            const context: AgentContext = {
+              repoName: repo,
+              repoMapMd,
+              pr,
+              autoMerge: this.config.qaAutoMerge,
+            };
 
-        // Execute CLI
-        await this.executeAgentCLI(agent, prompt, workspacePath);
-      } catch (error) {
-        success = false;
-        logger.error(`Error executing Agent ${agent.id} on PR #${pr.number}`, 'crawler', error);
-      } finally {
-        // Unlock the PR
-        await updatePullRequestLabels(repo, pr.number, [], ['agent:running']);
-        logger.info(
-          `\n┌────────────────────────────────────────────────────────────────────────────────` +
-            `\n│ <<< Finished Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
-            `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
-            `\n└────────────────────────────────────────────────────────────────────────────────\n`,
-          'crawler',
-        );
-      }
+            const prompt = agent.buildPrompt(context);
+
+            // Execute CLI
+            await this.executeAgentCLI(agent, prompt, workspacePath, taskNumber);
+          } catch (error) {
+            success = false;
+            logger.error(`Error executing Agent ${agent.id} on PR #${pr.number}`, 'crawler', error);
+          } finally {
+            // Unlock the PR
+            await updatePullRequestLabels(repo, pr.number, [], ['agent:running']);
+            if (workspacePath) {
+              cleanupWorktree(repo, taskNumber, this.config);
+            }
+            logger.info(
+              `\n┌────────────────────────────────────────────────────────────────────────────────` +
+                `\n│ <<< Finished Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
+                `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
+                `\n└────────────────────────────────────────────────────────────────────────────────\n`,
+              'crawler',
+            );
+          }
+        } finally {
+          removeTaskActive(key);
+        }
+      });
     }
   }
 
@@ -294,6 +344,7 @@ export class PipelineCrawler {
     agent: Agent,
     prompt: string,
     workspacePath: string,
+    taskNumber: string,
   ): Promise<void> {
     const isClaude = agent.commandType === 'claude';
     let cmd = isClaude ? this.config.claudeCommand : this.config.geminiCommand;
@@ -305,11 +356,44 @@ export class PipelineCrawler {
     // Aligned to pass prompt as an argument to the '-p' flag directly
     let runnerArgs = [...flags, '-p', prompt];
 
+    const repoFolder = path.basename(path.dirname(workspacePath));
+    const logFilePath = path.resolve(
+      this.config.workspacesDir,
+      repoFolder,
+      'logs',
+      `task-${taskNumber}.log`,
+    );
+
+    let lastLoggedAction = '';
+    const progressPatterns = [
+      /thinking/i,
+      /calling tool/i,
+      /tool call/i,
+      /executing/i,
+      /tool response/i,
+      /tool result/i,
+    ];
+    const onProgress = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (progressPatterns.some((pat) => pat.test(trimmed))) {
+        if (trimmed !== lastLoggedAction) {
+          lastLoggedAction = trimmed;
+          logger.info(`[${repoFolder}#${taskNumber} (${agent.id})]: ${trimmed}`, 'progress');
+        }
+      }
+    };
+
     try {
       const result = await runCommand({
         cmd,
         args: runnerArgs,
         cwd: workspacePath,
+        logFilePath,
+        silentStdout: true,
+        onProgress,
       });
 
       logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
@@ -340,6 +424,9 @@ export class PipelineCrawler {
           cmd,
           args: runnerArgs,
           cwd: workspacePath,
+          logFilePath,
+          silentStdout: true,
+          onProgress,
         });
         logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
       } else {
@@ -352,8 +439,8 @@ export class PipelineCrawler {
    * @what 2つのコードレビューエージェント（一般および意味的チェック）によるレビュー合格結果を確認し、状態をQAへと昇格させます。
    * @why それぞれ非同期で完了するレビューエージェントの出力を統合監視し、双方とも `PASSED` を報告した場合のみ自動的に次の `agent:qa` ラベルへ安全に移行させるため。
    */
-  private async postReviewCheck(repo: string): Promise<void> {
-    const prs = await getPullRequestsWithLabel(repo, 'agent:review');
+  private async postReviewCheck(repo: string, openPRs: GitHubPullRequest[]): Promise<void> {
+    const prs = openPRs.filter((pr) => pr.labels.includes('agent:review'));
 
     for (const pr of prs) {
       if (pr.labels.includes('agent:running')) {
@@ -384,8 +471,8 @@ export class PipelineCrawler {
    * @what 'agent:wait' (保留中) ラベルが付いているIssueにおいて、新着コメントが自分以外のユーザー（または別Bot）から投稿されたかを検知し、ラベルを自動解除します。
    * @why ユーザーがコメントで返答した際に、手動でラベルを剥がす手間を省き、自動的にエージェント実行サイクルを再開させるため。
    */
-  private async handleWaitingIssues(repo: string): Promise<void> {
-    const waitingIssues = await getIssuesWithLabel(repo, 'agent:wait');
+  private async handleWaitingIssues(repo: string, openIssues: GitHubIssue[]): Promise<void> {
+    const waitingIssues = openIssues.filter((issue) => issue.labels.includes('agent:wait'));
     if (waitingIssues.length === 0) {
       return;
     }
@@ -454,28 +541,45 @@ export class PipelineCrawler {
       }
     }
 
-    logger.info(
-      `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
-      'crawler',
-    );
-
-    try {
-      const workspacePath = ensureWorkspace(repo, this.config);
-      const repoMapMd = this.getRepoMapMd(repo);
-
-      const context: AgentContext = {
-        repoName: repo,
-        repoMapMd,
-      };
-
-      const agent = new QAGeneratorAgent(prefix);
-      const prompt = agent.buildPrompt(context);
-
-      // Execute Agent CLI (Claude) in workspace
-      await this.executeAgentCLI(agent, prompt, workspacePath);
-      logger.success(`QA Generator Agent completed successfully.`, 'crawler');
-    } catch (error) {
-      logger.error(`Failed to run QA Generator Agent on ${repo}`, 'crawler', error);
+    const key = `${repo}#qa-generator`;
+    if (isTaskActive(key)) {
+      logger.debug(`QA Generator task for ${repo} is already active/queued. Skipping.`, 'crawler');
+      return;
     }
+    addTaskActive(key);
+
+    nonConflictPool.enqueue(async () => {
+      logger.info(
+        `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
+        'crawler',
+      );
+
+      const taskNumber = 'qa-generator';
+      let workspacePath = '';
+      try {
+        const branchName = 'agent/qa-generator';
+        workspacePath = setupWorktree(repo, taskNumber, branchName, false, this.config);
+        const repoMapMd = this.getRepoMapMd(repo);
+
+        const context: AgentContext = {
+          repoName: repo,
+          repoMapMd,
+        };
+
+        const agent = new QAGeneratorAgent(prefix);
+        const prompt = agent.buildPrompt(context);
+
+        // Execute Agent CLI (Claude) in workspace
+        await this.executeAgentCLI(agent, prompt, workspacePath, taskNumber);
+        logger.success(`QA Generator Agent completed successfully.`, 'crawler');
+      } catch (error) {
+        logger.error(`Failed to run QA Generator Agent on ${repo}`, 'crawler', error);
+      } finally {
+        if (workspacePath) {
+          cleanupWorktree(repo, taskNumber, this.config);
+        }
+        removeTaskActive(key);
+      }
+    });
   }
 }
