@@ -11,6 +11,8 @@ import {
   getPullRequestsWithLabel,
   updatePullRequestLabels,
   getViewerLogin,
+  getIssue,
+  getPullRequest,
 } from './github-client.js';
 import { ensureWorkspace } from './workspace.js';
 
@@ -115,6 +117,42 @@ export class PipelineCrawler {
         continue;
       }
 
+      // --- STRICT LOCK CHECK ---
+      // WHY: crawlerの定期ポーリング処理は非同期かつ並列で実行される可能性があり、
+      // 最初に一覧を取得した時点から実際にエージェントを実行してロックをかけるまでの間に
+      // 他のランナーやプロセスによって 'agent:running' が付与されている可能性があります。
+      // 二重実行や処理の競合を防ぐため、ロック獲得直前に最新のIssue情報をGitHubから直接取得し直して、
+      // すでにロック中（またはユーザー返答待ち）になっていないかを厳密に再検証します。
+      const freshIssue = await getIssue(repo, issue.number);
+      if (!freshIssue) {
+        logger.warn(
+          `Skipping Issue #${issue.number} because it could not be fetched fresh.`,
+          'crawler',
+        );
+        continue;
+      }
+      if (freshIssue.labels.includes('agent:running')) {
+        logger.info(
+          `Skipping Issue #${issue.number} because it was locked by another process (agent:running detected).`,
+          'crawler',
+        );
+        continue;
+      }
+      if (freshIssue.labels.includes('agent:wait')) {
+        logger.info(
+          `Skipping Issue #${issue.number} because agent:wait was recently added.`,
+          'crawler',
+        );
+        continue;
+      }
+      if (!freshIssue.labels.includes(agent.label)) {
+        logger.info(
+          `Skipping Issue #${issue.number} because the target label "${agent.label}" was removed.`,
+          'crawler',
+        );
+        continue;
+      }
+
       logger.info(
         `\n┌────────────────────────────────────────────────────────────────────────────────` +
           `\n│ >>> Starting Agent: [${agent.id}] on Issue #${issue.number} in ${repo}` +
@@ -171,6 +209,32 @@ export class PipelineCrawler {
 
     for (const pr of prs) {
       if (pr.labels.includes('agent:running')) {
+        continue;
+      }
+
+      // --- STRICT LOCK CHECK ---
+      // WHY: crawlerの定期ポーリング処理は非同期かつ並列で実行される可能性があり、
+      // 最初に一覧を取得した時点から実際にエージェントを実行してロックをかけるまでの間に
+      // 他のランナーやプロセスによって 'agent:running' が付与されている可能性があります。
+      // 二重実行や処理の競合を防ぐため、ロック獲得直前に最新 of PR情報をGitHubから直接取得し直して、
+      // すでにロック中（またはユーザー返答待ち）になっていないかを厳密に再検証します。
+      const freshPR = await getPullRequest(repo, pr.number);
+      if (!freshPR) {
+        logger.warn(`Skipping PR #${pr.number} because it could not be fetched fresh.`, 'crawler');
+        continue;
+      }
+      if (freshPR.labels.includes('agent:running')) {
+        logger.info(
+          `Skipping PR #${pr.number} because it was locked by another process (agent:running detected).`,
+          'crawler',
+        );
+        continue;
+      }
+      if (!freshPR.labels.includes(agent.label)) {
+        logger.info(
+          `Skipping PR #${pr.number} because the target label "${agent.label}" was removed.`,
+          'crawler',
+        );
         continue;
       }
 

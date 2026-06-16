@@ -12,21 +12,6 @@ export const DEFAULT_GEMINI_FLAGS = ['--dangerously-skip-permissions'];
 export const DEFAULT_WORKSPACES_DIR_NAME = 'workspaces';
 
 /**
- * @what pnpm-workspace.yaml を探索してモノレポのワークスペースのルートディレクトリパスを検出します。
- * @why 相対パスの解釈基準点や、クローンしたワークスペースを配置する共通フォルダ `workspaces/` の絶対パスを常に正確に取得するため。
- */
-function findRootDir(): string {
-  let currentDir = process.cwd();
-  while (currentDir !== path.parse(currentDir).root) {
-    if (fs.existsSync(path.join(currentDir, 'pnpm-workspace.yaml'))) {
-      return currentDir;
-    }
-    currentDir = path.dirname(currentDir);
-  }
-  return process.cwd(); // fallback to process.cwd if not found
-}
-
-/**
  * @what YAML形式の設定ファイルから、監視対象リポジトリ名のリスト（例: owner/repo）を抽出してパースします。
  * @why 依存ライブラリを追加せずにシンプルかつ堅牢にリポジトリ設定配列をロードするため。
  */
@@ -70,7 +55,7 @@ function parseYamlRepositories(content: string): string[] {
  * @why 実行環境（Sandbox / Production）ごとの設定を間違えることのないよう明示的な引数入力を必須とし、システム定数と統合した設定を安全に配るため。
  */
 export function loadConfig(): AppConfig {
-  const rootDir = findRootDir();
+  const rootDir = process.cwd();
   logger.debug(`Detected workspace root directory: ${rootDir}`, 'config');
 
   // Parse command line arguments for --repo-map-dir or -d

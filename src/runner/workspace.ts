@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import type { AppConfig } from '../core/index.js';
 import { logger } from '../core/index.js';
 
@@ -21,7 +21,13 @@ export function ensureWorkspace(repo: string, config: AppConfig): string {
   if (!fs.existsSync(targetDir)) {
     logger.info(`Cloning repository ${repo} to ${targetDir}...`, 'workspace');
     try {
-      execSync(`gh repo clone "${repo}" "${targetDir}"`, { stdio: 'inherit' });
+      const result = spawnSync('gh', ['repo', 'clone', repo, targetDir], {
+        stdio: 'inherit',
+        shell: false,
+      });
+      if (result.status !== 0) {
+        throw new Error(`gh repo clone failed with status ${result.status}`);
+      }
       logger.success(`Repository ${repo} cloned successfully.`, 'workspace');
     } catch (error) {
       logger.error(`Failed to clone repository ${repo}`, 'workspace', error);
@@ -31,8 +37,26 @@ export function ensureWorkspace(repo: string, config: AppConfig): string {
     logger.info(`Updating repository ${repo} in ${targetDir}...`, 'workspace');
     try {
       // Pull latest main branch to be in sync
-      execSync(`git checkout main || git checkout master`, { cwd: targetDir, stdio: 'ignore' });
-      execSync(`git pull`, { cwd: targetDir, stdio: 'ignore' });
+      let checkoutResult = spawnSync('git', ['checkout', 'main'], {
+        cwd: targetDir,
+        stdio: 'ignore',
+        shell: false,
+      });
+      if (checkoutResult.status !== 0) {
+        checkoutResult = spawnSync('git', ['checkout', 'master'], {
+          cwd: targetDir,
+          stdio: 'ignore',
+          shell: false,
+        });
+      }
+      const pullResult = spawnSync('git', ['pull'], {
+        cwd: targetDir,
+        stdio: 'ignore',
+        shell: false,
+      });
+      if (pullResult.status !== 0) {
+        throw new Error(`git pull failed with status ${pullResult.status}`);
+      }
       logger.success(`Repository ${repo} updated.`, 'workspace');
     } catch (_error) {
       logger.warn(

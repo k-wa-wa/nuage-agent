@@ -1,6 +1,5 @@
-import { exec } from 'child_process';
 import type { GitHubIssue, GitHubComment, GitHubPullRequest } from '../core/index.js';
-import { logger } from '../core/index.js';
+import { logger, runCommand } from '../core/index.js';
 
 // Raw shapes returned by the GitHub CLI (gh) JSON output.
 // These are internal to this module; consumers use the GitHubIssue/Comment/PR types.
@@ -38,31 +37,29 @@ interface RawGHPR {
 }
 
 /**
- * @what 指定したシェルコマンドを実行し、その標準出力を文字列として返す薄いラッパー関数です。
- * @why github-client 内の gh CLI 呼び出しを一箇所に集約することで、エラーハンドリングと非同期変換を統一するため。
- */
-function execCommand(cmd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, stderr) => {
-      if (error) {
-        logger.error(`gh command error: ${stderr}`, 'github-client');
-        reject(error);
-      } else {
-        resolve(stdout);
-      }
-    });
-  });
-}
-
-/**
  * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Issueを取得します。
  * @why エージェントパイプライン用のラベル（agent:spec, agent:dev等）が付いたIssueを一括取得し、巡回処理の起点とするため。
  */
 export async function getIssuesWithLabel(repo: string, label: string): Promise<GitHubIssue[]> {
   try {
-    const cmd = `gh issue list --repo "${repo}" --label "${label}" --json number,title,body,state,labels,createdAt,updatedAt`;
-    const output = await execCommand(cmd);
-    const parsed = JSON.parse(output) as RawGHIssue[];
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'issue',
+        'list',
+        '--repo',
+        repo,
+        '--label',
+        label,
+        '--json',
+        'number,title,body,state,labels,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    const parsed = JSON.parse(result.stdout) as RawGHIssue[];
     return parsed.map((item) => ({
       number: item.number,
       title: item.title,
@@ -80,6 +77,97 @@ export async function getIssuesWithLabel(repo: string, label: string): Promise<G
 }
 
 /**
+ * @what 指定したリポジトリから、特定のIssue番号の最新情報を取得します。
+ * @why 処理直前に最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
+ */
+export async function getIssue(repo: string, issueNumber: number): Promise<GitHubIssue | null> {
+  try {
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'issue',
+        'view',
+        String(issueNumber),
+        '--repo',
+        repo,
+        '--json',
+        'number,title,body,state,labels,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      logger.error(
+        `Failed to view issue #${issueNumber} from ${repo}: ${result.stderr}`,
+        'github-client',
+      );
+      return null;
+    }
+    const item = JSON.parse(result.stdout) as RawGHIssue;
+    return {
+      number: item.number,
+      title: item.title,
+      body: item.body,
+      state: item.state.toLowerCase() as 'open' | 'closed',
+      labels: item.labels.map((l) => l.name),
+      user: '',
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  } catch (error) {
+    logger.error(`Failed to get issue #${issueNumber} from ${repo}`, 'github-client', error);
+    return null;
+  }
+}
+
+/**
+ * @what 指定したリポジトリから、特定のPull Request番号の最新情報を取得します。
+ * @why 処理直前に最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
+ */
+export async function getPullRequest(
+  repo: string,
+  prNumber: number,
+): Promise<GitHubPullRequest | null> {
+  try {
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'pr',
+        'view',
+        String(prNumber),
+        '--repo',
+        repo,
+        '--json',
+        'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      logger.error(
+        `Failed to view PR #${prNumber} from ${repo}: ${result.stderr}`,
+        'github-client',
+      );
+      return null;
+    }
+    const item = JSON.parse(result.stdout) as RawGHPR;
+    return {
+      number: item.number,
+      title: item.title,
+      body: item.body,
+      state: item.state.toLowerCase() as 'open' | 'closed',
+      labels: item.labels.map((l) => l.name),
+      branch: item.headRefName,
+      baseBranch: item.baseRefName,
+      merged: item.state.toLowerCase() === 'merged',
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  } catch (error) {
+    logger.error(`Failed to get PR #${prNumber} from ${repo}`, 'github-client', error);
+    return null;
+  }
+}
+
+/**
  * @what 指定したIssueのコメント一覧を取得し、内部型（GitHubComment[]）にマッピングして返します。
  * @why コメント履歴からBotが最後に発言した時刻やユーザー名を判定し、agent:waitスロットリング解除を行うため。
  */
@@ -88,9 +176,15 @@ export async function getIssueComments(
   issueNumber: number,
 ): Promise<GitHubComment[]> {
   try {
-    const cmd = `gh issue view ${issueNumber} --repo "${repo}" --json comments`;
-    const output = await execCommand(cmd);
-    const parsed = JSON.parse(output) as RawGHCommentsResponse;
+    const result = await runCommand({
+      cmd: 'gh',
+      args: ['issue', 'view', String(issueNumber), '--repo', repo, '--json', 'comments'],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    const parsed = JSON.parse(result.stdout) as RawGHCommentsResponse;
     const commentsList = parsed.comments;
     return commentsList.map((item) => ({
       id: item.id,
@@ -119,14 +213,21 @@ export async function updateIssueLabels(
   removeLabels: string[],
 ): Promise<void> {
   try {
-    let cmd = `gh issue edit ${issueNumber} --repo "${repo}"`;
-    if (addLabels.length > 0) {
-      cmd += ' ' + addLabels.map((l) => `--add-label "${l}"`).join(' ');
+    const args = ['issue', 'edit', String(issueNumber), '--repo', repo];
+    for (const label of addLabels) {
+      args.push('--add-label', label);
     }
-    if (removeLabels.length > 0) {
-      cmd += ' ' + removeLabels.map((l) => `--remove-label "${l}"`).join(' ');
+    for (const label of removeLabels) {
+      args.push('--remove-label', label);
     }
-    await execCommand(cmd);
+    const result = await runCommand({
+      cmd: 'gh',
+      args,
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
     logger.success(
       `Updated labels for issue #${issueNumber} in ${repo} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
       'github-client',
@@ -149,9 +250,24 @@ export async function getPullRequestsWithLabel(
   label: string,
 ): Promise<GitHubPullRequest[]> {
   try {
-    const cmd = `gh pr list --repo "${repo}" --label "${label}" --json number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt`;
-    const output = await execCommand(cmd);
-    const parsed = JSON.parse(output) as RawGHPR[];
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'pr',
+        'list',
+        '--repo',
+        repo,
+        '--label',
+        label,
+        '--json',
+        'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    const parsed = JSON.parse(result.stdout) as RawGHPR[];
     return parsed.map((item) => ({
       number: item.number,
       title: item.title,
@@ -185,14 +301,21 @@ export async function updatePullRequestLabels(
   removeLabels: string[],
 ): Promise<void> {
   try {
-    let cmd = `gh issue edit ${prNumber} --repo "${repo}"`;
-    if (addLabels.length > 0) {
-      cmd += ' ' + addLabels.map((l) => `--add-label "${l}"`).join(' ');
+    const args = ['issue', 'edit', String(prNumber), '--repo', repo];
+    for (const label of addLabels) {
+      args.push('--add-label', label);
     }
-    if (removeLabels.length > 0) {
-      cmd += ' ' + removeLabels.map((l) => `--remove-label "${l}"`).join(' ');
+    for (const label of removeLabels) {
+      args.push('--remove-label', label);
     }
-    await execCommand(cmd);
+    const result = await runCommand({
+      cmd: 'gh',
+      args,
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
     logger.success(
       `Updated labels for PR #${prNumber} in ${repo} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
       'github-client',
@@ -224,8 +347,25 @@ export async function ensureLabelsExist(repo: string): Promise<void> {
   );
   for (const label of PIPELINE_LABELS) {
     try {
-      const cmd = `gh label create "${label.name}" --repo "${repo}" --color "${label.color}" --description "${label.description}" --force`;
-      await execCommand(cmd);
+      const result = await runCommand({
+        cmd: 'gh',
+        args: [
+          'label',
+          'create',
+          label.name,
+          '--repo',
+          repo,
+          '--color',
+          label.color,
+          '--description',
+          label.description,
+          '--force',
+        ],
+        cwd: process.cwd(),
+      });
+      if (result.code !== 0) {
+        throw new Error(result.stderr);
+      }
     } catch (error) {
       logger.error(
         `Failed to ensure label "${label.name}" exists in ${repo}`,
@@ -242,8 +382,15 @@ export async function ensureLabelsExist(repo: string): Promise<void> {
  */
 export async function getViewerLogin(): Promise<string> {
   try {
-    const output = await execCommand('gh api user --jq .login');
-    return output.trim();
+    const result = await runCommand({
+      cmd: 'gh',
+      args: ['api', 'user', '--jq', '.login'],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    return result.stdout.trim();
   } catch (error) {
     logger.error('Failed to get current gh user login', 'github-client', error);
     return '';

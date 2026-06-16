@@ -1,5 +1,5 @@
 import type { AppConfig } from '../core/index.js';
-import { logger } from '../core/index.js';
+import { logger, runCommand } from '../core/index.js';
 import {
   getIssuesWithLabel,
   updateIssueLabels,
@@ -8,19 +8,6 @@ import {
   getIssueComments,
   getViewerLogin,
 } from './github-client.js';
-import { exec } from 'child_process';
-
-function execCommand(cmd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    exec(cmd, (error, stdout, _stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(stdout);
-      }
-    });
-  });
-}
 
 /**
  * @what GitHub Issue/PRパイプラインのフリーズ・未ラベル状態を監視し、タイムアウト・自動トリアージ・agent:wait解除を行う監視者クラスです。
@@ -89,9 +76,14 @@ export class PipelineSupervisor {
         // Comment on the issue
         const commentBody = `⚠️ **Supervisor Alert**: このタスクの実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。実行中にCLIがフリーズしたか、エラーが発生した可能性があります。`;
         try {
-          await execCommand(
-            `gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`,
-          );
+          const result = await runCommand({
+            cmd: 'gh',
+            args: ['issue', 'comment', String(issue.number), '--repo', repo, '--body', commentBody],
+            cwd: process.cwd(),
+          });
+          if (result.code !== 0) {
+            throw new Error(result.stderr);
+          }
           logger.success(`Posted timeout alert comment on Issue #${issue.number}`, 'supervisor');
         } catch (error) {
           logger.error(`Failed to post comment on Issue #${issue.number}`, 'supervisor', error);
@@ -129,7 +121,14 @@ export class PipelineSupervisor {
         // Comment on the PR
         const commentBody = `⚠️ **Supervisor Alert**: このプルリクエストのレビューまたはテスト実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。`;
         try {
-          await execCommand(`gh pr comment ${pr.number} --repo "${repo}" --body "${commentBody}"`);
+          const result = await runCommand({
+            cmd: 'gh',
+            args: ['pr', 'comment', String(pr.number), '--repo', repo, '--body', commentBody],
+            cwd: process.cwd(),
+          });
+          if (result.code !== 0) {
+            throw new Error(result.stderr);
+          }
           logger.success(`Posted timeout alert comment on PR #${pr.number}`, 'supervisor');
         } catch (error) {
           logger.error(`Failed to post comment on PR #${pr.number}`, 'supervisor', error);
@@ -156,16 +155,38 @@ export class PipelineSupervisor {
     }
     try {
       // Fetch open issues from the last 100 entries
-      const cmd = `gh issue list --repo "${repo}" --limit 100 --json number,title,labels`;
-      const output = await execCommand(cmd);
-      const issues = JSON.parse(output) as RawIssueSummary[];
+      const result = await runCommand({
+        cmd: 'gh',
+        args: ['issue', 'list', '--repo', repo, '--limit', '100', '--json', 'number,title,labels'],
+        cwd: process.cwd(),
+      });
+      if (result.code !== 0) {
+        throw new Error(result.stderr);
+      }
+      const issues = JSON.parse(result.stdout) as RawIssueSummary[];
 
       // Fetch open pull requests to check for linked issues
-      const prCmd = `gh pr list --repo "${repo}" --limit 100 --json number,title,body,headRefName`;
       let prs: RawPRSummary[] = [];
       try {
-        const prOutput = await execCommand(prCmd);
-        prs = JSON.parse(prOutput) as RawPRSummary[];
+        const prResult = await runCommand({
+          cmd: 'gh',
+          args: [
+            'pr',
+            'list',
+            '--repo',
+            repo,
+            '--limit',
+            '100',
+            '--json',
+            'number,title,body,headRefName',
+          ],
+          cwd: process.cwd(),
+        });
+        if (prResult.code === 0) {
+          prs = JSON.parse(prResult.stdout) as RawPRSummary[];
+        } else {
+          throw new Error(prResult.stderr);
+        }
       } catch (prError) {
         logger.error(`Failed to fetch pull requests in ${repo}`, 'supervisor', prError);
       }
@@ -201,9 +222,14 @@ export class PipelineSupervisor {
           await updateIssueLabels(repo, item.number, ['agent:spec'], []);
 
           const commentBody = `🤖 **Supervisor**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
-          await execCommand(
-            `gh issue comment ${item.number} --repo "${repo}" --body "${commentBody}"`,
-          );
+          const commentResult = await runCommand({
+            cmd: 'gh',
+            args: ['issue', 'comment', String(item.number), '--repo', repo, '--body', commentBody],
+            cwd: process.cwd(),
+          });
+          if (commentResult.code !== 0) {
+            throw new Error(commentResult.stderr);
+          }
         }
       }
     } catch (error) {
@@ -245,9 +271,22 @@ export class PipelineSupervisor {
               await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
 
               const commentBody = `🤖 **Supervisor**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
-              await execCommand(
-                `gh issue comment ${issue.number} --repo "${repo}" --body "${commentBody}"`,
-              );
+              const commentResult = await runCommand({
+                cmd: 'gh',
+                args: [
+                  'issue',
+                  'comment',
+                  String(issue.number),
+                  '--repo',
+                  repo,
+                  '--body',
+                  commentBody,
+                ],
+                cwd: process.cwd(),
+              });
+              if (commentResult.code !== 0) {
+                throw new Error(commentResult.stderr);
+              }
             }
           }
         }
