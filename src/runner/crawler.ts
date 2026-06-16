@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import type { AppConfig } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
 import type { Agent, AgentContext } from '../agents/index.js';
-import { agentsList } from '../agents/index.js';
+import { agentsList, QAGeneratorAgent } from '../agents/index.js';
 import {
   getIssuesWithLabel,
   getIssueComments,
@@ -13,6 +13,7 @@ import {
   getViewerLogin,
   getIssue,
   getPullRequest,
+  getRecentIssues,
 } from './github-client.js';
 import { ensureWorkspace } from './workspace.js';
 
@@ -75,6 +76,9 @@ export class PipelineCrawler {
 
         // Resolve 'agent:wait' locks if there are new user comments
         await this.handleWaitingIssues(repo);
+
+        // Run Proactive QA Generator Agent check
+        await this.runProactiveQAGenerator(repo);
 
         // Loop through each registered agent in the interface list
         for (const agent of agentsList) {
@@ -401,6 +405,77 @@ export class PipelineCrawler {
           await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
         }
       }
+    }
+  }
+
+  /**
+   * @what 定期的なQA改善Issue自動起票（プロアクティブエージェント）の実行チェックを行います。
+   * @why テスト不足箇所の拡充やLint改善を完全自動で小さく積み重ねるため、前回の起票から指定時間（テスト時10分/本番1日等）が経過し、かつ現在オープン中のQA改善Issueがない場合に起票エージェントを起動します。
+   */
+  private async runProactiveQAGenerator(repo: string): Promise<void> {
+    const intervalMinutes = this.config.qaIssueIntervalMinutes;
+    const prefix = this.config.qaIssuePrefix;
+
+    if (intervalMinutes <= 0) {
+      return;
+    }
+
+    logger.debug(`Checking proactive QA Generator for ${repo}...`, 'crawler');
+
+    // 1. Get recent issues with the prefix
+    const recentIssues = await getRecentIssues(repo);
+    const qaIssues = recentIssues.filter((issue) => issue.title.startsWith(prefix));
+
+    // Check if there is an open QA issue
+    const hasOpenQAIssue = qaIssues.some((issue) => issue.state.toLowerCase() === 'open');
+    if (hasOpenQAIssue) {
+      logger.info(
+        `Skipping QA issue generation: An open issue with prefix "${prefix}" already exists.`,
+        'crawler',
+      );
+      return;
+    }
+
+    // Check time elapsed since the last QA issue was created
+    if (qaIssues.length > 0) {
+      // Sort issues by creation date descending
+      qaIssues.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const latestIssue = qaIssues[0];
+      const latestCreatedAt = new Date(latestIssue.createdAt).getTime();
+      const now = new Date().getTime();
+      const elapsedMinutes = (now - latestCreatedAt) / (1000 * 60);
+
+      if (elapsedMinutes < intervalMinutes) {
+        logger.info(
+          `Skipping QA issue generation: Only ${elapsedMinutes.toFixed(1)} minutes elapsed since the last issue was created (Interval: ${intervalMinutes} minutes).`,
+          'crawler',
+        );
+        return;
+      }
+    }
+
+    logger.info(
+      `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
+      'crawler',
+    );
+
+    try {
+      const workspacePath = ensureWorkspace(repo, this.config);
+      const repoMapMd = this.getRepoMapMd(repo);
+
+      const context: AgentContext = {
+        repoName: repo,
+        repoMapMd,
+      };
+
+      const agent = new QAGeneratorAgent(prefix);
+      const prompt = agent.buildPrompt(context);
+
+      // Execute Agent CLI (Claude) in workspace
+      await this.executeAgentCLI(agent, prompt, workspacePath);
+      logger.success(`QA Generator Agent completed successfully.`, 'crawler');
+    } catch (error) {
+      logger.error(`Failed to run QA Generator Agent on ${repo}`, 'crawler', error);
     }
   }
 }

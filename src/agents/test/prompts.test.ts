@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert';
 import type { AgentContext } from '../index.js';
-import { SpecAgent, DevAgent, DevPRAgent, ReviewGeneralAgent, QAAgent } from '../index.js';
+import {
+  SpecAgent,
+  DevAgent,
+  DevPRAgent,
+  ReviewGeneralAgent,
+  QAAgent,
+  QAGeneratorAgent,
+} from '../index.js';
 
 void test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
@@ -170,4 +177,21 @@ void test('DevPRAgent compiles prompt with correct metadata', () => {
   assert.match(prompt, /Pull Request #888/);
   assert.match(prompt, /gh pr checkout 888/);
   assert.match(prompt, /gh issue edit 888 --add-label "agent:review" --remove-label "agent:dev"/);
+});
+
+void test('QAGeneratorAgent compiles prompt with correct metadata', () => {
+  const agent = new QAGeneratorAgent('[QA-Improve]');
+  const context: AgentContext = {
+    repoName: 'pechka',
+    repoMapMd: '## Test Framework Rules',
+  };
+
+  const prompt = agent.buildPrompt(context);
+
+  assert.match(prompt, /QA改善・品質向上エージェント/);
+  assert.match(prompt, /pechka/);
+  assert.match(prompt, /## Test Framework Rules/);
+  assert.match(prompt, /\[QA-Improve\]/);
+  assert.match(prompt, /gh issue create/);
+  assert.match(prompt, /agent:spec/);
 });

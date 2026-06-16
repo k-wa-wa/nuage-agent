@@ -396,3 +396,37 @@ export async function getViewerLogin(): Promise<string> {
     return '';
   }
 }
+
+/**
+ * @what 指定したリポジトリから、すべての状態（open/closed）の最近のIssueのタイトル、状態、作成日時を取得します。
+ * @why QA改善Issueの定期起票チェックにおいて、すでに同じプレフィックスを持つIssueがオープンされているか、または前回の起票から指定時間（例: 10分、1日）が経過しているかを検証するため。
+ */
+export async function getRecentIssues(
+  repo: string,
+): Promise<{ title: string; state: string; createdAt: string }[]> {
+  try {
+    const result = await runCommand({
+      cmd: 'gh',
+      args: [
+        'issue',
+        'list',
+        '--repo',
+        repo,
+        '--state',
+        'all',
+        '--limit',
+        '100',
+        '--json',
+        'title,state,createdAt',
+      ],
+      cwd: process.cwd(),
+    });
+    if (result.code !== 0) {
+      throw new Error(result.stderr);
+    }
+    return JSON.parse(result.stdout) as { title: string; state: string; createdAt: string }[];
+  } catch (error) {
+    logger.error(`Failed to get recent issues from ${repo}`, 'github-client', error);
+    return [];
+  }
+}

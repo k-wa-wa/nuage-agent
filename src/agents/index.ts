@@ -5,6 +5,7 @@ export { DevPRAgent } from './dev-pr/agent.js';
 export { ReviewGeneralAgent } from './review-general/agent.js';
 export { ReviewSemanticAgent } from './review-semantic/agent.js';
 export { QAAgent } from './qa/agent.js';
+export { QAGeneratorAgent } from './qa-generator/agent.js';
 
 import { SpecAgent } from './spec/agent.js';
 import { DevAgent } from './dev/agent.js';

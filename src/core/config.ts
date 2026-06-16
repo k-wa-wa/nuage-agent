@@ -103,6 +103,18 @@ export function loadConfig(): AppConfig {
     const autoMerge = args.includes('--auto-merge');
     logger.info(`QA Agent Auto Merge: ${autoMerge}`, 'config');
 
+    // Parse QA issues configuration from CLI
+    let qaIntervalIndex = args.indexOf('--qa-interval');
+    if (qaIntervalIndex === -1) {
+      qaIntervalIndex = args.indexOf('-i');
+    }
+    const qaInterval = qaIntervalIndex !== -1 ? parseInt(args[qaIntervalIndex + 1], 10) : 1440; // Default: 1 day = 1440 minutes
+
+    const qaPrefixIndex = args.indexOf('--qa-prefix');
+    const qaPrefix = qaPrefixIndex !== -1 ? args[qaPrefixIndex + 1] : '[QA-Improve]';
+
+    logger.info(`QA Issue Interval: ${qaInterval} minutes, Prefix: "${qaPrefix}"`, 'config');
+
     return {
       repositories,
       repoMapDir: resolvedRepoMapDir,
@@ -113,6 +125,8 @@ export function loadConfig(): AppConfig {
       geminiFlags: DEFAULT_GEMINI_FLAGS,
       workspacesDir: path.resolve(rootDir, DEFAULT_WORKSPACES_DIR_NAME),
       qaAutoMerge: autoMerge,
+      qaIssueIntervalMinutes: qaInterval,
+      qaIssuePrefix: qaPrefix,
     };
   } catch (error) {
     throw new Error(`Failed to load and parse repo-map configuration: ${String(error)}`, {
