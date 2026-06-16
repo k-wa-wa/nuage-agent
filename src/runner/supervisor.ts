@@ -5,8 +5,6 @@ import {
   updateIssueLabels,
   getPullRequestsWithLabel,
   updatePullRequestLabels,
-  getIssueComments,
-  getViewerLogin,
 } from './github-client.js';
 
 /**
@@ -37,9 +35,6 @@ export class PipelineSupervisor {
 
         // 3. Auto-label open issues that have no agent:* labels
         await this.triageUnlabeledIssues(repo);
-
-        // 4. Recover waiting issues with forgotten agent:wait labels
-        await this.recoverWaitingIssues(repo);
       }
     } catch (error) {
       logger.error('Error during Supervisor checks', 'supervisor', error);
@@ -234,65 +229,6 @@ export class PipelineSupervisor {
       }
     } catch (error) {
       logger.error(`Failed to triage unlabeled issues in ${repo}`, 'supervisor', error);
-    }
-  }
-
-  /**
-   * @what 'agent:wait' が付与されたまま放置されているIssueを検知し、自動的に解除（再開）します。
-   * @why ユーザーがコメントを追加せずに、Issueの本文編集やリアクション等でアクションを取った場合、タスクがスタックしてしまうため、
-   *      更新日時（updatedAt）の差分をチェックして、人のアクティビティがあれば自動救済します。
-   */
-  private async recoverWaitingIssues(repo: string): Promise<void> {
-    try {
-      const waitingIssues = await getIssuesWithLabel(repo, 'agent:wait');
-      if (waitingIssues.length === 0) {
-        return;
-      }
-
-      const currentBotUser = await getViewerLogin();
-
-      for (const issue of waitingIssues) {
-        const comments = await getIssueComments(repo, issue.number);
-        if (comments.length > 0) {
-          const latestComment = comments[comments.length - 1];
-
-          // If the latest comment is from the bot itself, but the issue's updatedAt is newer
-          // than the comment's createdAt, it means someone updated the description/labels/etc.
-          if (latestComment.user === currentBotUser) {
-            const updatedAt = new Date(issue.updatedAt).getTime();
-            const commentCreatedAt = new Date(latestComment.createdAt).getTime();
-
-            // 15 minutes threshold to allow users to finish consecutive operations and recover forgotten label
-            if (updatedAt - commentCreatedAt > 15 * 60 * 1000) {
-              logger.info(
-                `User activity (edit/label) detected on Issue #${issue.number} with forgotten wait label. Auto-removing 'agent:wait'.`,
-                'supervisor',
-              );
-              await updateIssueLabels(repo, issue.number, [], ['agent:wait']);
-
-              const commentBody = `🤖 **Supervisor**: ユーザーのアクティビティ検出から15分が経過したため、\`agent:wait\` ラベルを自動解除して処理を再開します。`;
-              const commentResult = await runCommand({
-                cmd: 'gh',
-                args: [
-                  'issue',
-                  'comment',
-                  String(issue.number),
-                  '--repo',
-                  repo,
-                  '--body',
-                  commentBody,
-                ],
-                cwd: process.cwd(),
-              });
-              if (commentResult.code !== 0) {
-                throw new Error(commentResult.stderr);
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      logger.error(`Failed to recover waiting issues in ${repo}`, 'supervisor', error);
     }
   }
 }
