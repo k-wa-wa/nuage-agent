@@ -16,6 +16,8 @@
    リポジトリのルールや構成マップ（repo-map）を記述することで、様々な技術スタックやディレクトリ構成のリポジトリに容易に対応可能。
 4. **抜け漏れ救済（Supervisor）**
    実行中ロックのタイムアウト（ハング状態）、自己修正の無限ループ、ラベルが剥がれた状態のIssueなどをバックグラウンドで監視・修復し、例外時には自動で人間へボールを引き渡す。
+5. **QA改善Issueの自律自動起票（Proactive QA）**
+   前回の起票から指定時間（テスト時10分、運用時1日等）が経過すると、コードベースのテスト網羅率やLint設定の改善案を自動的に分析し、小さくマージしやすい改善Issue（`agent:spec`）を自動起票します。
 
 ---
 
@@ -82,6 +84,7 @@ flowchart TD
         QA --> Q1 --> Q2 --> Q3
     end
 
+    QAGEN["QA改善自動起票 (QAGen)"] -->|"指定周期(テスト10分/本番1日)で<br/>agent:specラベル付きIssueを作成"| SPEC_PH
     START -->|"Supervisor: 未ラベルIssue → agent:spec 付与"| SPEC_PH
     SP2 --> WAIT
     SP5 --> WAIT
@@ -155,6 +158,20 @@ pnpm dev:runner -- --repo-map-dir ./repo-map/production
 
 ```bash
 pnpm dev:runner --once -- --repo-map-dir ./repo-map/sandbox
+```
+
+### QA改善自動起票の設定
+
+QA改善自動起票エージェントの挙動を調整するために、以下の引数が利用可能です。
+
+- `--qa-interval` (または `-i`): 起票時間間隔を分単位で指定します。デフォルトは `1440`（1日）です。テスト等で高頻度に検証したい場合は `10` などを指定します。
+- `--qa-prefix`: 自動起票されるIssueのタイトルにつける接頭辞を指定します。デフォルトは `[QA-Improve]` です。この接頭辞を持つ未解決のIssueがある場合は新規起票がスキップされます。
+
+実行例:
+
+```bash
+# テスト用に10分間隔でQA起票を行う場合
+pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox --qa-interval 10
 ```
 
 ---
