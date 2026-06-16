@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { load } from 'js-yaml';
 import type { AppConfig } from './types.js';
 import { logger } from './logger.js';
 
@@ -13,38 +14,14 @@ export const DEFAULT_WORKSPACES_DIR_NAME = 'workspaces';
 
 /**
  * @what YAML形式の設定ファイルから、監視対象リポジトリ名のリスト（例: owner/repo）を抽出してパースします。
- * @why 依存ライブラリを追加せずにシンプルかつ堅牢にリポジトリ設定配列をロードするため。
+ * @why js-yaml ライブラリを使用することで、YAMLパーサーを手動で実装する複雑さとバグの発生リスクを排除するため。
  */
 function parseYamlRepositories(content: string): string[] {
-  const repos: string[] = [];
-  const lines = content.split('\n');
-  let inRepositories = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    if (trimmed.startsWith('repositories:')) {
-      inRepositories = true;
-      continue;
-    }
-
-    if (inRepositories) {
-      if (trimmed.includes(':') && !trimmed.startsWith('-')) {
-        break;
-      }
-      if (trimmed.startsWith('-')) {
-        const repo = trimmed.substring(1).trim().replace(/['"]/g, '');
-        if (repo) {
-          repos.push(repo);
-        }
-      }
-    }
+  const parsed = load(content) as { repositories?: string[] } | null;
+  if (!parsed || !Array.isArray(parsed.repositories)) {
+    return [];
   }
-
-  return repos;
+  return parsed.repositories;
 }
 
 /**

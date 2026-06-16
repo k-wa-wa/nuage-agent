@@ -1,11 +1,11 @@
 import type { AppConfig } from '../../core/index.js';
-import { logger } from '../../core/index.js';
 import { QAGeneratorAgent } from '../../agents/index.js';
-import { setupWorktree, cleanupWorktree } from '../workspace/index.js';
-import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './cli.js';
-import * as tui from '../tui/index.js';
+import { runAgentTask } from './task-helper.js';
 
+/**
+ * @what QA Generator用タスクを実行するためのオプション。
+ * @why 関数のパラメータ数を上限（4個）以内に抑えて可読性を高めるため。
+ */
 export interface QATaskOptions {
   repo: string;
   config: AppConfig;
@@ -14,54 +14,25 @@ export interface QATaskOptions {
 }
 
 /**
- * @what QA Generator用ブランチのワークツリーを作成し、CLIを実行して後片付けを行います。
- * @why 隔離環境下でQA提案Issue作成コマンドを実行し、完了後に作業資源を解放するため。
- */
-async function executeQAGeneratorCLI(taskNumber: string, options: QATaskOptions): Promise<boolean> {
-  const { repo, config, repoMapMd, prefix } = options;
-  let workspacePath = '';
-  let success = true;
-
-  try {
-    const branchName = 'agent/qa-generator';
-    workspacePath = setupWorktree(config, { repo, taskNumber, branchName, isPR: false });
-    const context = { repoName: repo, repoMapMd };
-    const agent = new QAGeneratorAgent(prefix);
-    const prompt = agent.buildPrompt(context);
-
-    await executeAgentCLI(config, { agent, prompt, workspacePath, taskNumber });
-    logger.success(`QA Generator Agent completed successfully.`, 'crawler');
-  } catch (error) {
-    success = false;
-    logger.error(`Failed to run QA Generator Agent on ${repo}`, 'crawler', error);
-  } finally {
-    if (workspacePath) {
-      cleanupWorktree(repo, taskNumber, config);
-    }
-  }
-  return success;
-}
-
-/**
  * @what QA Generatorエージェントのライフサイクル全体の実行を制御します。
- * @why 隔離環境確保、CLI起動による自動起票、および後片付けを一貫して行うため。
+ * @why 共通の runAgentTask ヘルパーを呼び出して隔離ワークツリー構築・自動起票CLI起動・後処理を統合実行するため。
  */
 export async function runQAGeneratorTask(options: QATaskOptions): Promise<void> {
-  const { repo } = options;
+  const { repo, config, repoMapMd, prefix } = options;
   const key = `${repo}#qa-generator`;
+  const taskNumber = 'qa-generator';
+  const branchName = 'agent/qa-generator';
+  const agent = new QAGeneratorAgent(prefix);
 
-  try {
-    logger.info(
-      `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
-      'crawler',
-    );
-
-    const taskNumber = 'qa-generator';
-    tui.taskQueued(key, repo, `QA Generator`); // Make sure we queue in TUI
-    tui.taskStarted(key);
-    const success = await executeQAGeneratorCLI(taskNumber, options);
-    tui.taskFinished(key, success);
-  } finally {
-    removeTaskActive(key);
-  }
+  await runAgentTask({
+    repo,
+    taskKey: key,
+    taskNumber,
+    agent,
+    config,
+    branchName,
+    isPR: false,
+    buildContext: () => ({ repoName: repo, repoMapMd }),
+    onStartLog: () => `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
+  });
 }

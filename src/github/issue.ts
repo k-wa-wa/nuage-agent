@@ -1,6 +1,7 @@
 import type { GitHubIssue, GitHubComment } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
 import type { RawGHIssue, RawGHCommentsResponse, RawIssueSummary } from './client.js';
+import { updateLabels, addComment } from './common.js';
 
 /**
  * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Issueを取得します。
@@ -121,7 +122,7 @@ export async function getIssueComments(
 
 /**
  * @what 指定したIssueにラベルを追加・削除します。
- * @why エージェントパイプラインの状態遷移やwaitラベルの付け外しを gh CLI 経由で行うため。
+ * @why 共通の updateLabels 関数を呼び出し、コードの重複を排除するため。
  */
 export async function updateIssueLabels(
   repo: string,
@@ -129,25 +130,7 @@ export async function updateIssueLabels(
   addLabels: string[],
   removeLabels: string[],
 ): Promise<void> {
-  try {
-    const args = ['issue', 'edit', String(issueNumber), '--repo', repo];
-    for (const label of addLabels) {
-      args.push('--add-label', label);
-    }
-    for (const label of removeLabels) {
-      args.push('--remove-label', label);
-    }
-    const result = await runCommand({ cmd: 'gh', args, cwd: process.cwd() });
-    if (result.code !== 0) {
-      throw new Error(result.stderr);
-    }
-    logger.success(
-      `Updated labels for issue #${issueNumber} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
-      'github-client',
-    );
-  } catch (error) {
-    logger.error(`Failed to update labels for issue #${issueNumber}`, 'github-client', error);
-  }
+  return updateLabels(repo, issueNumber, addLabels, removeLabels);
 }
 
 /**
@@ -210,21 +193,14 @@ export async function getRawIssues(repo: string): Promise<RawIssueSummary[]> {
 
 /**
  * @what 指定したIssueに新しくコメントを追加投稿します。
- * @why エージェント進行状況やエラーアラート、自動開始コメントをユーザーに通知するため。
+ * @why 共通の addComment 関数を呼び出し、コードの重複を排除するため。
  */
 export async function addIssueComment(
   repo: string,
   issueNumber: number,
   body: string,
 ): Promise<void> {
-  const result = await runCommand({
-    cmd: 'gh',
-    args: ['issue', 'comment', String(issueNumber), '--repo', repo, '--body', body],
-    cwd: process.cwd(),
-  });
-  if (result.code !== 0) {
-    throw new Error(result.stderr);
-  }
+  return addComment(repo, issueNumber, body);
 }
 
 /**

@@ -1,11 +1,8 @@
 import type { AppConfig, GitHubPullRequest } from '../../core/index.js';
 import type { Agent } from '../../agents/index.js';
 import { logger } from '../../core/index.js';
-import { updatePullRequestLabels, getPullRequest } from '../../github/index.js';
-import { setupWorktree, cleanupWorktree } from '../workspace/index.js';
-import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './cli.js';
-import * as tui from '../tui/index.js';
+import { getPullRequest } from '../../github/index.js';
+import { runAgentTask } from './task-helper.js';
 
 /**
  * @what PRに対するエージェント処理を実行するためのオプション。
@@ -21,7 +18,7 @@ export interface PRTaskOptions {
 
 /**
  * @what 最新のPRラベルを取得し、実行可能か（他で実行中になっていないか等）検証します。
- * @why 分散実行時の二重実行防止（排他制御）を厳密にい行うため。
+ * @why 分散実行時の二重実行防止（排他制御）を厳密に行うため。ただし、レビューエージェント（review-general, review-semantic）については、それぞれ異なる worktree で並行して実行可能であるため、GitHub 上の 'agent:running' ラベルによる競合スキップをバイパスします（メモリ上の activeTaskKeys にて二重実行は安全に防止されます）。
  */
 async function performPRLockCheck(
   repo: string,
@@ -33,7 +30,9 @@ async function performPRLockCheck(
     logger.warn(`Skipping PR #${pr.number}: could not fetch fresh.`, 'crawler');
     return true;
   }
-  if (freshPR.labels.includes('agent:running')) {
+  // @why レビューエージェント同士は並行実行を許容したいため、エージェントIDが 'review-' から始まる場合は 'agent:running' による競合ロック判定を無視します。
+  //      これにより、一般レビューと意味的レビューがスキップされることなく並行して動作します。
+  if (freshPR.labels.includes('agent:running') && !agent.id.startsWith('review-')) {
     logger.info(`Skipping PR #${pr.number}: locked by another process.`, 'crawler');
     return true;
   }
@@ -45,74 +44,36 @@ async function performPRLockCheck(
 }
 
 /**
- * @what PRに対応するworktreeを作成し、エージェントCLIを実行して後片付けを行います。
- * @why 隔離環境下でPRブランチを検証し、実行完了後に状態を更新するため。
- */
-async function executePRCLI(taskNumber: string, options: PRTaskOptions): Promise<boolean> {
-  const { repo, agent, pr, config, repoMapMd } = options;
-  let workspacePath = '';
-  let success = true;
-
-  try {
-    workspacePath = setupWorktree(config, {
-      repo,
-      taskNumber,
-      branchName: pr.branch,
-      isPR: true,
-      prNumber: pr.number,
-    });
-    const context = { repoName: repo, repoMapMd, pr, autoMerge: config.qaAutoMerge };
-    const prompt = agent.buildPrompt(context);
-
-    await executeAgentCLI(config, { agent, prompt, workspacePath, taskNumber });
-  } catch (error) {
-    success = false;
-    logger.error(`Error executing Agent ${agent.id} on PR #${pr.number}`, 'crawler', error);
-  } finally {
-    await updatePullRequestLabels(repo, pr.number, [], ['agent:running']);
-    if (workspacePath) {
-      cleanupWorktree(repo, taskNumber, config);
-    }
-    logger.info(
-      `\n┌────────────────────────────────────────────────────────────────────────────────` +
-        `\n│ <<< Finished Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
-        `\n│     Status: ${success ? 'SUCCESS' : 'FAILED'}` +
-        `\n└────────────────────────────────────────────────────────────────────────────────\n`,
-      'crawler',
-    );
-  }
-  return success;
-}
-
-/**
  * @what PRに対するエージェントのライフサイクル全体の実行を制御します。
- * @why ロック確認・獲得、隔離ワークツリー構築、CLI起動、後処理・解除の流れを統合実行するため。
+ * @why ロック確認を経て、共通の runAgentTask ヘルパーを呼び出して隔離ワークツリー構築・CLI起動・後処理を統合実行するため。
  */
 export async function runPRAgentTask(options: PRTaskOptions): Promise<void> {
-  const { repo, agent, pr } = options;
+  const { repo, agent, pr, config, repoMapMd } = options;
   const key = `${repo}#${pr.number}-${agent.id}`;
 
-  try {
-    const isLocked = await performPRLockCheck(repo, pr, agent);
-    if (isLocked) {
-      return;
-    }
-
-    logger.info(
-      `\n┌────────────────────────────────────────────────────────────────────────────────` +
-        `\n│ >>> Starting Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
-        `\n│     Title: "${pr.title}"` +
-        `\n└────────────────────────────────────────────────────────────────────────────────`,
-      'crawler',
-    );
-
-    await updatePullRequestLabels(repo, pr.number, ['agent:running'], []);
-
-    const taskNumber = `${pr.number}-${agent.id}`;
-    tui.taskStarted(key);
-    const success = await executePRCLI(taskNumber, options);
-    tui.taskFinished(key, success);
-  } finally {
-    removeTaskActive(key);
+  const isLocked = await performPRLockCheck(repo, pr, agent);
+  if (isLocked) {
+    return;
   }
+
+  const taskNumber = `${pr.number}-${agent.id}`;
+
+  await runAgentTask({
+    repo,
+    taskKey: key,
+    taskNumber,
+    agent,
+    config,
+    branchName: pr.branch,
+    isPR: true,
+    prNumber: pr.number,
+    buildContext: () => ({ repoName: repo, repoMapMd, pr, autoMerge: config.qaAutoMerge }),
+    onStartLog: () =>
+      `\n┌────────────────────────────────────────────────────────────────────────────────` +
+      `\n│ >>> Starting Agent: [${agent.id}] on PR #${pr.number} in ${repo}` +
+      `\n│     Title: "${pr.title}"` +
+      `\n└────────────────────────────────────────────────────────────────────────────────`,
+    onStartLabelsUpdate: { add: ['agent:running'], remove: [] },
+    onFinishLabelsUpdate: { add: [], remove: ['agent:running'] },
+  });
 }

@@ -17,10 +17,10 @@ gh auth status
 
 ```bash
 # Sandbox環境用
-pnpm labels:create -- --repo-map-dir ./repo-map/sandbox
+bun run labels:create -- --repo-map-dir ./repo-map/sandbox
 
 # 本番環境用
-pnpm labels:create -- --repo-map-dir ./repo-map/production
+bun run labels:create -- --repo-map-dir ./repo-map/production
 ```
 
 ## 3. 検証環境の自動セットアップ
@@ -28,7 +28,7 @@ pnpm labels:create -- --repo-map-dir ./repo-map/production
 以下のコマンドを実行します。
 
 ```bash
-pnpm sandbox:setup
+bun run sandbox:setup
 ```
 
 - GitHub上に検証用リポジトリ `k-wa-wa/workflow-sandbox` がない場合は自動で作成します。
@@ -39,7 +39,7 @@ pnpm sandbox:setup
 以下のコマンドでランナーを 1 サイクルのみ単発実行します。
 
 ```bash
-pnpm sandbox:run
+bun run sandbox:run
 ```
 
 - プロジェクト全体をビルドしたあと、クローラーを起動します。

@@ -46,11 +46,16 @@ export interface RawPRSummary {
   headRefName: string;
 }
 
+let cachedViewerLogin: string | null = null;
+
 /**
  * @what GitHub CLI (gh) の現在のアクティブなログインユーザー名を取得します。
- * @why 自身のBot発言とユーザーの発言を区別するため。
+ * @why 自身のBot発言とユーザーの発言を区別するため。起動時に取得した結果をキャッシュして再利用することで、不要な gh プロセス起動を削減します。
  */
 export async function getViewerLogin(): Promise<string> {
+  if (cachedViewerLogin !== null) {
+    return cachedViewerLogin;
+  }
   try {
     const result = await runCommand({
       cmd: 'gh',
@@ -60,7 +65,8 @@ export async function getViewerLogin(): Promise<string> {
     if (result.code !== 0) {
       throw new Error(result.stderr);
     }
-    return result.stdout.trim();
+    cachedViewerLogin = result.stdout.trim();
+    return cachedViewerLogin;
   } catch (error) {
     logger.error('Failed to get current gh user login', 'github-client', error);
     return '';

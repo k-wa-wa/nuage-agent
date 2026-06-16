@@ -1,6 +1,7 @@
 import type { GitHubPullRequest } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
 import type { RawGHPR, RawPRSummary } from './client.js';
+import { updateLabels, addComment } from './common.js';
 
 /**
  * @what 指定したリポジトリから、特定のPull Request番号の最新情報を取得します。
@@ -101,7 +102,7 @@ export async function getPullRequestsWithLabel(
 
 /**
  * @what 指定したPRにラベルを追加・削除します。
- * @why PRパイプラインの状態遷移や実行ロック制御をgh CLI経由で行うため。
+ * @why 共通の updateLabels 関数を呼び出し、コードの重複を排除するため。
  */
 export async function updatePullRequestLabels(
   repo: string,
@@ -109,25 +110,7 @@ export async function updatePullRequestLabels(
   addLabels: string[],
   removeLabels: string[],
 ): Promise<void> {
-  try {
-    const args = ['issue', 'edit', String(prNumber), '--repo', repo];
-    for (const label of addLabels) {
-      args.push('--add-label', label);
-    }
-    for (const label of removeLabels) {
-      args.push('--remove-label', label);
-    }
-    const result = await runCommand({ cmd: 'gh', args, cwd: process.cwd() });
-    if (result.code !== 0) {
-      throw new Error(result.stderr);
-    }
-    logger.success(
-      `Updated labels for PR #${prNumber} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
-      'github-client',
-    );
-  } catch (error) {
-    logger.error(`Failed to update labels for PR #${prNumber} in ${repo}`, 'github-client', error);
-  }
+  return updateLabels(repo, prNumber, addLabels, removeLabels);
 }
 
 /**
@@ -201,19 +184,12 @@ export async function getRawPRs(repo: string): Promise<RawPRSummary[]> {
 
 /**
  * @what 指定したPRに新しくコメントを追加投稿します。
- * @why エージェント進行状況やエラーアラートをPRコメントとしてユーザーに通知するため。
+ * @why 共通の addComment 関数を呼び出し、コードの重複を排除するため。
  */
 export async function addPullRequestComment(
   repo: string,
   prNumber: number,
   body: string,
 ): Promise<void> {
-  const result = await runCommand({
-    cmd: 'gh',
-    args: ['pr', 'comment', String(prNumber), '--repo', repo, '--body', body],
-    cwd: process.cwd(),
-  });
-  if (result.code !== 0) {
-    throw new Error(result.stderr);
-  }
+  return addComment(repo, prNumber, body);
 }

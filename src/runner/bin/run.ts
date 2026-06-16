@@ -3,6 +3,7 @@ import { PipelineCrawler } from '../core/crawler.js';
 import { PipelineSupervisor } from '../core/supervisor.js';
 import { registerShutdownHandlers } from '../tasks/pool.js';
 import { initTui } from '../tui/index.js';
+import { getViewerLogin } from '../../github/index.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -20,6 +21,14 @@ async function main() {
   } catch (error) {
     logger.error('Failed to load configuration', 'main', error);
     process.exit(1);
+  }
+
+  // Prefetch and cache GitHub viewer login info
+  try {
+    const viewer = await getViewerLogin();
+    logger.info(`Authenticated as GitHub user: ${viewer}`, 'main');
+  } catch (error) {
+    logger.warn('Failed to prefetch GitHub viewer login', 'main', error);
   }
 
   const crawler = new PipelineCrawler(config);
