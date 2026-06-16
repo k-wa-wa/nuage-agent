@@ -3,15 +3,15 @@ import * as fs from 'fs';
 import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js';
 import type { Agent } from '../agents/index.js';
 import { agentsList } from '../agents/index.js';
+import { logger } from '../core/index.js';
 import {
-  logger,
   getIssueComments,
   updatePullRequestLabels,
   getViewerLogin,
   getRecentIssues,
   getAllOpenIssues,
   getAllOpenPRs,
-} from '../core/index.js';
+} from '../github/index.js';
 import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from './pool.js';
 import { runIssueAgentTask, runPRAgentTask, runQAGeneratorTask } from './task-runner.js';
 

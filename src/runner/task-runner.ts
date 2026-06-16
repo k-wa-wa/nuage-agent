@@ -2,14 +2,13 @@ import * as path from 'path';
 import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js';
 import type { Agent } from '../agents/index.js';
 import { QAGeneratorAgent } from '../agents/index.js';
+import { logger, runCommand } from '../core/index.js';
 import {
-  logger,
-  runCommand,
   updateIssueLabels,
   updatePullRequestLabels,
   getIssue,
   getPullRequest,
-} from '../core/index.js';
+} from '../github/index.js';
 import { setupWorktree, cleanupWorktree } from './workspace.js';
 import { removeTaskActive } from './pool.js';
 
