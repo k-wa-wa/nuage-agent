@@ -75,13 +75,7 @@
 
 ### ESLint ルールと設計意図
 
-詳細な設定および各ルールの設計意図（@why）については、[eslint.config.ts](file:///home/nixos/ghq/github.com/k-wa-wa/nuage-agent/eslint.config.ts) のコード内コメントを参照のこと。
-
-- **`max-lines` (最大 300 行)**: 単一ファイルの肥大化防止と適切なファイル分割の促進。
-- **`max-lines-per-function` (最大 50 行)**: 関数の単一責任化と要約の正確性担保。
-- **`complexity` (最大 10)**: 循環複雑度の制限による分岐経路の削減。
-- **`max-depth` (最大 4 階層)**: ネストの抑制によるフラットな処理フローの維持。
-- **`max-params` (最大 4 個)**: 引数制限によるオブジェクト引数（カプセル化）の推奨。
+詳細な設定および各ルールの設計意図については、[eslint.config.ts](../eslint.config.ts) のコード内コメントを参照のこと。
 
 ### モジュール構造
 
