@@ -41,12 +41,16 @@ export function buildPoolsText(): string {
 }
 
 function formatTaskStatus(t: TaskState): string {
-  if (t.status === 'queued') return 'QUEUED';
+  if (t.status === 'queued') {
+    return 'QUEUED';
+  }
   if (t.status === 'running') {
     const elapsed = Math.floor((Date.now() - (t.startTime?.getTime() ?? 0)) / 1000);
     return `RUNNING (${elapsed}s)`;
   }
-  if (t.status === 'completed') return 'SUCCESS';
+  if (t.status === 'completed') {
+    return 'SUCCESS';
+  }
   const errPart = t.error ? ` (${t.error})` : '';
   return `FAILED${errPart}`;
 }
@@ -79,9 +83,17 @@ export function formatLogLine(level: string, msg: string, err?: unknown): string
 
   const errPart = errStr ? ` - ${errStr}` : '';
 
-  if (level === 'success') return `✔ ${msg}${errPart}`;
-  if (level === 'warn') return `⚠ ${msg}${errPart}`;
-  if (level === 'error') return `✘ ${msg}${errPart}`;
-  if (level === 'debug') return `[dbg] ${msg}${errPart}`;
+  if (level === 'success') {
+    return `✔ ${msg}${errPart}`;
+  }
+  if (level === 'warn') {
+    return `⚠ ${msg}${errPart}`;
+  }
+  if (level === 'error') {
+    return `✘ ${msg}${errPart}`;
+  }
+  if (level === 'debug') {
+    return `[dbg] ${msg}${errPart}`;
+  }
   return `${msg}${errPart}`;
 }

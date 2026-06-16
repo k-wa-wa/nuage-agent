@@ -3,7 +3,7 @@ import { logger } from '../core/index.js';
 import { QAGeneratorAgent } from '../agents/index.js';
 import { setupWorktree, cleanupWorktree } from './workspace.js';
 import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './task-runner.js';
+import { executeAgentCLI } from './agent-cli.js';
 import * as tui from './tui.js';
 
 export interface QATaskOptions {

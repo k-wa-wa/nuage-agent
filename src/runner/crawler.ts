@@ -14,7 +14,8 @@ import {
   getAllOpenPRs,
 } from '../github/index.js';
 import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from './pool.js';
-import { runIssueAgentTask, runPRAgentTask } from './task-runner.js';
+import { runIssueAgentTask } from './issue-runner.js';
+import { runPRAgentTask } from './pr-runner.js';
 import { runQAGeneratorTask } from './qa-runner.js';
 
 /**
