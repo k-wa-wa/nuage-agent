@@ -1,8 +1,7 @@
-import type { GitHubIssue, GitHubComment, GitHubPullRequest } from '../core/index.js';
-import { logger, runCommand } from '../core/index.js';
+import type { GitHubIssue, GitHubComment, GitHubPullRequest } from './types.js';
+import { logger } from './logger.js';
+import { runCommand } from './runner.js';
 
-// Raw shapes returned by the GitHub CLI (gh) JSON output.
-// These are internal to this module; consumers use the GitHubIssue/Comment/PR types.
 interface RawGHIssue {
   number: number;
   title: string;
@@ -36,9 +35,22 @@ interface RawGHPR {
   updatedAt: string;
 }
 
+interface RawIssueSummary {
+  number: number;
+  title: string;
+  labels: { name: string }[];
+}
+
+interface RawPRSummary {
+  number: number;
+  title: string;
+  body: string;
+  headRefName: string;
+}
+
 /**
  * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Issueを取得します。
- * @why エージェントパイプライン用のラベル（agent:spec, agent:dev等）が付いたIssueを一括取得し、巡回処理の起点とするため。
+ * @why エージェントパイプライン用のラベルが付いたIssueを一括取得し、巡回処理の起点とするため。
  */
 export async function getIssuesWithLabel(repo: string, label: string): Promise<GitHubIssue[]> {
   try {
@@ -66,7 +78,7 @@ export async function getIssuesWithLabel(repo: string, label: string): Promise<G
       body: item.body,
       state: item.state.toLowerCase() as 'open' | 'closed',
       labels: item.labels.map((l) => l.name),
-      user: '', // gh issue list doesn't return user by default, not needed for pipeline check
+      user: '',
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }));
@@ -78,7 +90,7 @@ export async function getIssuesWithLabel(repo: string, label: string): Promise<G
 
 /**
  * @what 指定したリポジトリから、特定のIssue番号の最新情報を取得します。
- * @why 処理直前に最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
+ * @why 最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
  */
 export async function getIssue(repo: string, issueNumber: number): Promise<GitHubIssue | null> {
   try {
@@ -121,7 +133,7 @@ export async function getIssue(repo: string, issueNumber: number): Promise<GitHu
 
 /**
  * @what 指定したリポジトリから、特定のPull Request番号の最新情報を取得します。
- * @why 処理直前に最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
+ * @why 最新のラベル状態をGitHub APIから直接取得し、他プロセスによる二重実行（競合）を防ぐ厳密なロックチェックを行うため。
  */
 export async function getPullRequest(
   repo: string,
@@ -169,7 +181,7 @@ export async function getPullRequest(
 
 /**
  * @what 指定したIssueのコメント一覧を取得し、内部型（GitHubComment[]）にマッピングして返します。
- * @why コメント履歴からBotが最後に発言した時刻やユーザー名を判定し、agent:waitスロットリング解除を行うため。
+ * @why コメント履歴からBotが最後に発言した時刻やユーザー名を判定し、agent:wait解除を行うため。
  */
 export async function getIssueComments(
   repo: string,
@@ -185,8 +197,7 @@ export async function getIssueComments(
       throw new Error(result.stderr);
     }
     const parsed = JSON.parse(result.stdout) as RawGHCommentsResponse;
-    const commentsList = parsed.comments;
-    return commentsList.map((item) => ({
+    return parsed.comments.map((item) => ({
       id: item.id,
       body: item.body,
       user: item.author.login,
@@ -204,7 +215,7 @@ export async function getIssueComments(
 
 /**
  * @what 指定したIssueにラベルを追加・削除します。
- * @why エージェントパイプラインの状態遷移（spec→dev→review→qa）やwaitラベルの付け外しを gh CLI 経由で行うため。
+ * @why エージェントパイプラインの状態遷移やwaitラベルの付け外しを gh CLI 経由で行うため。
  */
 export async function updateIssueLabels(
   repo: string,
@@ -220,30 +231,22 @@ export async function updateIssueLabels(
     for (const label of removeLabels) {
       args.push('--remove-label', label);
     }
-    const result = await runCommand({
-      cmd: 'gh',
-      args,
-      cwd: process.cwd(),
-    });
+    const result = await runCommand({ cmd: 'gh', args, cwd: process.cwd() });
     if (result.code !== 0) {
       throw new Error(result.stderr);
     }
     logger.success(
-      `Updated labels for issue #${issueNumber} in ${repo} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
+      `Updated labels for issue #${issueNumber} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
       'github-client',
     );
   } catch (error) {
-    logger.error(
-      `Failed to update labels for issue #${issueNumber} in ${repo}`,
-      'github-client',
-      error,
-    );
+    logger.error(`Failed to update labels for issue #${issueNumber}`, 'github-client', error);
   }
 }
 
 /**
  * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Pull Requestを取得します。
- * @why PRパイプライン（agent:review, agent:qa等）の巡回処理で、ラベル付きPRを一括取得するため。
+ * @why PRパイプラインの巡回処理で、ラベル付きPRを一括取得するため。
  */
 export async function getPullRequestsWithLabel(
   repo: string,
@@ -292,7 +295,7 @@ export async function getPullRequestsWithLabel(
 
 /**
  * @what 指定したPRにラベルを追加・削除します。
- * @why PRパイプラインの状態遷移（review→dev, review→qa等）や実行ロック制御をgh CLI経由で行うため。
+ * @why PRパイプラインの状態遷移や実行ロック制御をgh CLI経由で行うため。
  */
 export async function updatePullRequestLabels(
   repo: string,
@@ -308,16 +311,12 @@ export async function updatePullRequestLabels(
     for (const label of removeLabels) {
       args.push('--remove-label', label);
     }
-    const result = await runCommand({
-      cmd: 'gh',
-      args,
-      cwd: process.cwd(),
-    });
+    const result = await runCommand({ cmd: 'gh', args, cwd: process.cwd() });
     if (result.code !== 0) {
       throw new Error(result.stderr);
     }
     logger.success(
-      `Updated labels for PR #${prNumber} in ${repo} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
+      `Updated labels for PR #${prNumber} (Added: [${addLabels.join(',')}], Removed: [${removeLabels.join(',')}])`,
       'github-client',
     );
   } catch (error) {
@@ -337,14 +336,10 @@ const PIPELINE_LABELS = [
 
 /**
  * @what パイプラインの各フェーズに用いる GitHub ラベルを一括作成・更新（冪等）します。
- * @why ランナーの起動前に確実に状態ラベルが存在することを保証し、手動で GitHub 上にラベルを作成する手間を省くため。
- *      権限エラーを防ぐためにランナー本体の起動処理からは切り離し、独立したCLIコマンドから実行するようにしました。
+ * @why ランナーの起動前に確実に状態ラベルが存在することを保証するため。
  */
 export async function ensureLabelsExist(repo: string): Promise<void> {
-  logger.info(
-    `Checking and ensuring pipeline labels exist for repository: ${repo}`,
-    'github-client',
-  );
+  logger.info(`Ensuring pipeline labels exist for repository: ${repo}`, 'github-client');
   for (const label of PIPELINE_LABELS) {
     try {
       const result = await runCommand({
@@ -378,7 +373,7 @@ export async function ensureLabelsExist(repo: string): Promise<void> {
 
 /**
  * @what GitHub CLI (gh) の現在のアクティブなログインユーザー名を取得します。
- * @why 自身のBot発言とユーザーの発言を区別し、回答待ちスロットリング状態（agent:wait）を自動解除するために現在のBotのユーザー名を特定する必要があるため。
+ * @why 自身のBot発言とユーザーの発言を区別するため。
  */
 export async function getViewerLogin(): Promise<string> {
   try {
@@ -399,7 +394,7 @@ export async function getViewerLogin(): Promise<string> {
 
 /**
  * @what 指定したリポジトリから、すべての状態（open/closed）の最近のIssueのタイトル、状態、作成日時を取得します。
- * @why QA改善Issueの定期起票チェックにおいて、すでに同じプレフィックスを持つIssueがオープンされているか、または前回の起票から指定時間（例: 10分、1日）が経過しているかを検証するため。
+ * @why QA改善Issueの定期起票チェックにおける重複確認や経過時間検証を行うため。
  */
 export async function getRecentIssues(
   repo: string,
@@ -514,5 +509,84 @@ export async function getAllOpenPRs(repo: string): Promise<GitHubPullRequest[]> 
   } catch (error) {
     logger.error(`Failed to get all open PRs from ${repo}`, 'github-client', error);
     return [];
+  }
+}
+
+/**
+ * @what GitHub CLI を用いて対象リポジトリの直近オープンIssue一覧を取得します。
+ * @why 未割り当てIssueを検出するための最新情報を取得するため。
+ */
+export async function getRawIssues(repo: string): Promise<RawIssueSummary[]> {
+  const result = await runCommand({
+    cmd: 'gh',
+    args: ['issue', 'list', '--repo', repo, '--limit', '100', '--json', 'number,title,labels'],
+    cwd: process.cwd(),
+  });
+  if (result.code !== 0) {
+    throw new Error(result.stderr);
+  }
+  return JSON.parse(result.stdout) as RawIssueSummary[];
+}
+
+/**
+ * @what GitHub CLI を用いて対象リポジトリの直近オープンPR一覧を取得します。
+ * @why 未割り当てIssueがPRに紐づいているかどうかの検証に用いるため。
+ */
+export async function getRawPRs(repo: string): Promise<RawPRSummary[]> {
+  const prResult = await runCommand({
+    cmd: 'gh',
+    args: [
+      'pr',
+      'list',
+      '--repo',
+      repo,
+      '--limit',
+      '100',
+      '--json',
+      'number,title,body,headRefName',
+    ],
+    cwd: process.cwd(),
+  });
+  if (prResult.code === 0) {
+    return JSON.parse(prResult.stdout) as RawPRSummary[];
+  }
+  throw new Error(prResult.stderr);
+}
+
+/**
+ * @what 指定したIssueに新しくコメントを追加投稿します。
+ * @why エージェント進行状況やエラーアラート、自動開始コメントをユーザーに通知するため。
+ */
+export async function addIssueComment(
+  repo: string,
+  issueNumber: number,
+  body: string,
+): Promise<void> {
+  const result = await runCommand({
+    cmd: 'gh',
+    args: ['issue', 'comment', String(issueNumber), '--repo', repo, '--body', body],
+    cwd: process.cwd(),
+  });
+  if (result.code !== 0) {
+    throw new Error(result.stderr);
+  }
+}
+
+/**
+ * @what 指定したPRに新しくコメントを追加投稿します。
+ * @why エージェント進行状況やエラーアラートをPRコメントとしてユーザーに通知するため。
+ */
+export async function addPullRequestComment(
+  repo: string,
+  prNumber: number,
+  body: string,
+): Promise<void> {
+  const result = await runCommand({
+    cmd: 'gh',
+    args: ['pr', 'comment', String(prNumber), '--repo', repo, '--body', body],
+    cwd: process.cwd(),
+  });
+  if (result.code !== 0) {
+    throw new Error(result.stderr);
   }
 }

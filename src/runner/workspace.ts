@@ -5,6 +5,81 @@ import type { AppConfig } from '../core/index.js';
 import { logger } from '../core/index.js';
 
 /**
+ * @what ワークツリーを作成・初期化する際の詳細な設定オプションインターフェース。
+ * @why 関数のパラメータ数を上限（4個）以内に抑えて可読性を高めるため。
+ */
+export interface WorktreeOptions {
+  repo: string;
+  taskNumber: number | string;
+  branchName: string;
+  isPR: boolean;
+}
+
+/**
+ * @what ベースリポジトリを指定されたディレクトリにクローンします。
+ * @why リモートリポジトリの完全なコピーをローカルに確保するため。
+ */
+function cloneBaseRepo(repo: string, baseDir: string): void {
+  logger.info(`Cloning repository ${repo} to base repository ${baseDir}...`, 'workspace');
+  try {
+    const result = spawnSync('gh', ['repo', 'clone', repo, baseDir], {
+      stdio: 'inherit',
+      shell: false,
+    });
+    if (result.status !== 0) {
+      throw new Error(`gh repo clone failed with status ${result.status}`);
+    }
+    // Set head remote to allow symbolic ref lookup offline
+    spawnSync('git', ['remote', 'set-head', 'origin', '-a'], {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    });
+    logger.success(`Base repository ${repo} cloned successfully.`, 'workspace');
+  } catch (error) {
+    logger.error(`Failed to clone repository ${repo}`, 'workspace', error);
+    throw error;
+  }
+}
+
+/**
+ * @what 既存のベースリポジトリを指定されたデフォルトブランチに切り替え、最新化します。
+ * @why リモートで発生した最新のコミットを取り込み同期するため。
+ */
+function updateBaseRepo(baseDir: string): void {
+  logger.info(`Updating base repository in ${baseDir}...`, 'workspace');
+  try {
+    const defaultBranch = getDefaultBranch(baseDir);
+    spawnSync('git', ['checkout', defaultBranch], {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    });
+    const pullResult = spawnSync('git', ['pull'], {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    });
+    if (pullResult.status !== 0) {
+      throw new Error(`git pull failed with status ${pullResult.status}`);
+    }
+    // Update remote set-head symbolic ref just in case
+    spawnSync('git', ['remote', 'set-head', 'origin', '-a'], {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    });
+    logger.success(`Base repository updated.`, 'workspace');
+  } catch (error) {
+    logger.warn(
+      `Failed to update base repository. Will proceed with current state.`,
+      'workspace',
+      error,
+    );
+  }
+}
+
+/**
  * @what 指定されたリポジトリのベースとなるクローン（ローカルマスターコピー）を `workspaces/<repoFolder>/base` に確保・同期します。
  * @why 全てのタスクが worktree として派生する起点であり、最新のリモート変更を一括で受け取る共通のキャッシュとして機能させるため。
  */
@@ -22,57 +97,9 @@ export function ensureBaseRepo(repo: string, config: AppConfig): string {
   }
 
   if (!fs.existsSync(baseDir)) {
-    logger.info(`Cloning repository ${repo} to base repository ${baseDir}...`, 'workspace');
-    try {
-      const result = spawnSync('gh', ['repo', 'clone', repo, baseDir], {
-        stdio: 'inherit',
-        shell: false,
-      });
-      if (result.status !== 0) {
-        throw new Error(`gh repo clone failed with status ${result.status}`);
-      }
-      // Set head remote to allow symbolic ref lookup offline
-      spawnSync('git', ['remote', 'set-head', 'origin', '-a'], {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      });
-      logger.success(`Base repository ${repo} cloned successfully.`, 'workspace');
-    } catch (error) {
-      logger.error(`Failed to clone repository ${repo}`, 'workspace', error);
-      throw error;
-    }
+    cloneBaseRepo(repo, baseDir);
   } else {
-    logger.info(`Updating base repository ${repo} in ${baseDir}...`, 'workspace');
-    try {
-      const defaultBranch = getDefaultBranch(baseDir);
-      spawnSync('git', ['checkout', defaultBranch], {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      });
-      const pullResult = spawnSync('git', ['pull'], {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      });
-      if (pullResult.status !== 0) {
-        throw new Error(`git pull failed with status ${pullResult.status}`);
-      }
-      // Update remote set-head symbolic ref just in case
-      spawnSync('git', ['remote', 'set-head', 'origin', '-a'], {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      });
-      logger.success(`Base repository ${repo} updated.`, 'workspace');
-    } catch (error) {
-      logger.warn(
-        `Failed to update base repository ${repo}. Will proceed with current state.`,
-        'workspace',
-        error,
-      );
-    }
+    updateBaseRepo(baseDir);
   }
 
   return baseDir;
@@ -104,92 +131,100 @@ export function getDefaultBranch(baseDir: string): string {
 }
 
 /**
+ * @what PR用のデタッチドワークツリーを作成し、PRのコミットをチェックアウトします。
+ * @why PRブランチをクリーンな隔離環境にチェックアウトしてテストや検証を行うため。
+ */
+function setupWorktreePR(
+  baseDir: string,
+  taskDir: string,
+  taskNumber: number | string,
+  defaultBranch: string,
+): void {
+  logger.info(`Creating detached worktree at ${taskDir} for PR #${taskNumber}...`, 'workspace');
+  const addResult = spawnSync(
+    'git',
+    ['worktree', 'add', '--detach', taskDir, `origin/${defaultBranch}`],
+    {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    },
+  );
+  if (addResult.status !== 0) {
+    throw new Error(`Failed to create worktree for PR #${taskNumber}`);
+  }
+
+  logger.info(`Checking out PR #${taskNumber} in worktree...`, 'workspace');
+  const checkoutResult = spawnSync('gh', ['pr', 'checkout', String(taskNumber)], {
+    cwd: taskDir,
+    stdio: 'ignore',
+    shell: false,
+  });
+  if (checkoutResult.status !== 0) {
+    throw new Error(`Failed to checkout PR #${taskNumber} inside worktree`);
+  }
+}
+
+/**
+ * @what 通常のIssue開発用の新規ブランチを持つワークツリーを作成します。
+ * @why 重複したブランチ作成エラーを防ぎ、デフォルトブランチから新規開発用の枝を切るため。
+ */
+function setupWorktreeBranch(
+  baseDir: string,
+  taskDir: string,
+  branchName: string,
+  defaultBranch: string,
+): void {
+  logger.info(`Creating worktree at ${taskDir} for branch ${branchName}...`, 'workspace');
+  // Ensure local branch does not exist in base repo to prevent checkout/tracking conflicts
+  spawnSync('git', ['branch', '-D', branchName], {
+    cwd: baseDir,
+    stdio: 'ignore',
+    shell: false,
+  });
+
+  const addResult = spawnSync(
+    'git',
+    ['worktree', 'add', '-b', branchName, taskDir, `origin/${defaultBranch}`],
+    {
+      cwd: baseDir,
+      stdio: 'ignore',
+      shell: false,
+    },
+  );
+  if (addResult.status !== 0) {
+    throw new Error(`Failed to create worktree for branch ${branchName} at ${taskDir}`);
+  }
+}
+
+/**
  * @what 特定のIssue番号またはPR番号に対応する個別の作業ディレクトリ (Git Worktree) を切り出します。
  * @why 複数のエージェントが異なるタスクを並列して実行する際、ファイル変更、ブランチ切り替え、ローカルビルドファイル等の競合を完全に防ぐため。
  */
-export function setupWorktree(
-  repo: string,
-  taskNumber: number | string,
-  branchName: string,
-  isPR: boolean,
-  config: AppConfig,
-): string {
+export function setupWorktree(config: AppConfig, options: WorktreeOptions): string {
+  const { repo, taskNumber, branchName, isPR } = options;
   const repoFolder = repo.split('/').pop() ?? repo;
   const baseDir = ensureBaseRepo(repo, config);
   const taskDir = path.resolve(config.workspacesDir, repoFolder, `task-${taskNumber}`);
 
-  // Create log directory outside worktrees to prevent git tracking issues
   const logDir = path.resolve(config.workspacesDir, repoFolder, 'logs');
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
 
-  // If worktree already exists (from an interrupted run), remove it cleanly first
   if (fs.existsSync(taskDir)) {
     logger.info(`Worktree folder already exists at ${taskDir}. Cleaning it up...`, 'workspace');
     cleanupWorktree(repo, taskNumber, config);
   }
 
   const defaultBranch = getDefaultBranch(baseDir);
-
-  // Sync base repo branch
-  spawnSync('git', ['checkout', defaultBranch], {
-    cwd: baseDir,
-    stdio: 'ignore',
-    shell: false,
-  });
-  spawnSync('git', ['pull'], {
-    cwd: baseDir,
-    stdio: 'ignore',
-    shell: false,
-  });
+  spawnSync('git', ['checkout', defaultBranch], { cwd: baseDir, stdio: 'ignore', shell: false });
+  spawnSync('git', ['pull'], { cwd: baseDir, stdio: 'ignore', shell: false });
 
   if (isPR) {
-    logger.info(`Creating detached worktree at ${taskDir} for PR #${taskNumber}...`, 'workspace');
-    // For PRs, add a detached worktree first, then checkout the PR branch inside the worktree
-    const addResult = spawnSync(
-      'git',
-      ['worktree', 'add', '--detach', taskDir, `origin/${defaultBranch}`],
-      {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      },
-    );
-    if (addResult.status !== 0) {
-      throw new Error(`Failed to create worktree for PR #${taskNumber}`);
-    }
-
-    logger.info(`Checking out PR #${taskNumber} in worktree...`, 'workspace');
-    const checkoutResult = spawnSync('gh', ['pr', 'checkout', String(taskNumber)], {
-      cwd: taskDir,
-      stdio: 'ignore',
-      shell: false,
-    });
-    if (checkoutResult.status !== 0) {
-      throw new Error(`Failed to checkout PR #${taskNumber} inside worktree`);
-    }
+    setupWorktreePR(baseDir, taskDir, taskNumber, defaultBranch);
   } else {
-    logger.info(`Creating worktree at ${taskDir} for branch ${branchName}...`, 'workspace');
-    // Ensure local branch does not exist in base repo to prevent checkout/tracking conflicts
-    spawnSync('git', ['branch', '-D', branchName], {
-      cwd: baseDir,
-      stdio: 'ignore',
-      shell: false,
-    });
-
-    const addResult = spawnSync(
-      'git',
-      ['worktree', 'add', '-b', branchName, taskDir, `origin/${defaultBranch}`],
-      {
-        cwd: baseDir,
-        stdio: 'ignore',
-        shell: false,
-      },
-    );
-    if (addResult.status !== 0) {
-      throw new Error(`Failed to create worktree for branch ${branchName} at ${taskDir}`);
-    }
+    setupWorktreeBranch(baseDir, taskDir, branchName, defaultBranch);
   }
 
   return taskDir;
@@ -228,12 +263,7 @@ export function cleanupWorktree(
     }
   }
 
-  // Prune registered worktrees list to clean up refs
-  spawnSync('git', ['worktree', 'prune'], {
-    cwd: baseDir,
-    stdio: 'ignore',
-    shell: false,
-  });
+  spawnSync('git', ['worktree', 'prune'], { cwd: baseDir, stdio: 'ignore', shell: false });
 }
 
 /**

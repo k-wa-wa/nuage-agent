@@ -88,6 +88,13 @@ export default tseslint.config(
       eqeqeq: ['error', 'always'],
       curly: ['error', 'all'],
       'prefer-const': 'error',
+      complexity: ['error', { max: 10 }],
+      'max-lines-per-function': [
+        'error',
+        { max: 50, skipBlankLines: true, skipComments: true },
+      ],
+      'max-depth': ['error', { max: 4 }],
+      'max-params': ['error', { max: 4 }],
     },
   },
 );

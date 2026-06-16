@@ -1,11 +1,72 @@
 import type { AppConfig } from '../core/index.js';
-import { logger, runCommand } from '../core/index.js';
 import {
+  logger,
   getIssuesWithLabel,
   updateIssueLabels,
   getPullRequestsWithLabel,
   updatePullRequestLabels,
-} from './github-client.js';
+  getRawIssues,
+  getRawPRs,
+  addIssueComment,
+  addPullRequestComment,
+} from '../core/index.js';
+
+interface RawIssueSummary {
+  number: number;
+  title: string;
+  labels: { name: string }[];
+}
+
+interface RawPRSummary {
+  number: number;
+  title: string;
+  body: string;
+  headRefName: string;
+}
+
+/**
+ * @what 単一のIssueについて、プレフィックスラベルが無い場合に自動トリアージを行い、コメントを投稿します。
+ * @why タスクの新規起票からワークフローの乗せ換えまでを完全に自動化するため。
+ */
+async function triageSingleIssue(
+  repo: string,
+  item: RawIssueSummary,
+  prs: RawPRSummary[],
+): Promise<void> {
+  const labels = item.labels.map((l) => l.name);
+  const hasAgentLabel = labels.some((l) => l.startsWith('agent:'));
+  if (hasAgentLabel) {
+    return;
+  }
+
+  const hasActivePR = prs.some((pr) => {
+    const issueRefRegex = new RegExp(`\\b#${item.number}\\b`);
+    const branchNameRef = `issue-${item.number}`;
+    return (
+      issueRefRegex.test(pr.title) ||
+      issueRefRegex.test(pr.body || '') ||
+      pr.headRefName.includes(branchNameRef)
+    );
+  });
+
+  if (hasActivePR) {
+    logger.info(
+      `Issue #${item.number} has no agent:* labels but has active PR referencing it. Skipping auto-assigning agent:spec.`,
+      'supervisor',
+    );
+    return;
+  }
+
+  logger.info(`Unlabeled Issue #${item.number} found. Assigning agent:spec...`, 'supervisor');
+  await updateIssueLabels(repo, item.number, ['agent:spec'], []);
+
+  const commentBody = `🤖 **Supervisor**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
+  try {
+    await addIssueComment(repo, item.number, commentBody);
+  } catch (error) {
+    logger.error(`Failed to post comment on Issue #${item.number}`, 'supervisor', error);
+  }
+}
 
 /**
  * @what GitHub Issue/PRパイプラインのフリーズ・未ラベル状態を監視し、タイムアウト・自動トリアージ・agent:wait解除を行う監視者クラスです。
@@ -27,13 +88,8 @@ export class PipelineSupervisor {
     logger.info('Starting Supervisor checks...', 'supervisor');
     try {
       for (const repo of this.config.repositories) {
-        // 1. Recover stuck Issue locks
         await this.recoverStuckIssues(repo);
-
-        // 2. Recover stuck PR locks
         await this.recoverStuckPRs(repo);
-
-        // 3. Auto-label open issues that have no agent:* labels
         await this.triageUnlabeledIssues(repo);
       }
     } catch (error) {
@@ -60,7 +116,6 @@ export class PipelineSupervisor {
           'supervisor',
         );
 
-        // Remove lock and transition to triage
         await updateIssueLabels(
           repo,
           issue.number,
@@ -68,17 +123,9 @@ export class PipelineSupervisor {
           ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
         );
 
-        // Comment on the issue
-        const commentBody = `⚠️ **Supervisor Alert**: このタスクの実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。実行中にCLIがフリーズしたか、エラーが発生した可能性があります。`;
+        const commentBody = `⚠️ **Supervisor Alert**: このタスクの実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。`;
         try {
-          const result = await runCommand({
-            cmd: 'gh',
-            args: ['issue', 'comment', String(issue.number), '--repo', repo, '--body', commentBody],
-            cwd: process.cwd(),
-          });
-          if (result.code !== 0) {
-            throw new Error(result.stderr);
-          }
+          await addIssueComment(repo, issue.number, commentBody);
           logger.success(`Posted timeout alert comment on Issue #${issue.number}`, 'supervisor');
         } catch (error) {
           logger.error(`Failed to post comment on Issue #${issue.number}`, 'supervisor', error);
@@ -105,7 +152,6 @@ export class PipelineSupervisor {
           'supervisor',
         );
 
-        // Remove lock and transition to triage
         await updatePullRequestLabels(
           repo,
           pr.number,
@@ -113,17 +159,9 @@ export class PipelineSupervisor {
           ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
         );
 
-        // Comment on the PR
         const commentBody = `⚠️ **Supervisor Alert**: このプルリクエストのレビューまたはテスト実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。`;
         try {
-          const result = await runCommand({
-            cmd: 'gh',
-            args: ['pr', 'comment', String(pr.number), '--repo', repo, '--body', commentBody],
-            cwd: process.cwd(),
-          });
-          if (result.code !== 0) {
-            throw new Error(result.stderr);
-          }
+          await addPullRequestComment(repo, pr.number, commentBody);
           logger.success(`Posted timeout alert comment on PR #${pr.number}`, 'supervisor');
         } catch (error) {
           logger.error(`Failed to post comment on PR #${pr.number}`, 'supervisor', error);
@@ -137,95 +175,17 @@ export class PipelineSupervisor {
    * @why 新しい課題がGitHub上に起票された際、人間が手動でラベルを割り当てることなく、自動的にパイプラインの初期フェーズ（仕様定義）に乗せるため。
    */
   private async triageUnlabeledIssues(repo: string): Promise<void> {
-    interface RawIssueSummary {
-      number: number;
-      title: string;
-      labels: { name: string }[];
-    }
-    interface RawPRSummary {
-      number: number;
-      title: string;
-      body: string;
-      headRefName: string;
-    }
     try {
-      // Fetch open issues from the last 100 entries
-      const result = await runCommand({
-        cmd: 'gh',
-        args: ['issue', 'list', '--repo', repo, '--limit', '100', '--json', 'number,title,labels'],
-        cwd: process.cwd(),
-      });
-      if (result.code !== 0) {
-        throw new Error(result.stderr);
-      }
-      const issues = JSON.parse(result.stdout) as RawIssueSummary[];
-
-      // Fetch open pull requests to check for linked issues
+      const issues = await getRawIssues(repo);
       let prs: RawPRSummary[] = [];
       try {
-        const prResult = await runCommand({
-          cmd: 'gh',
-          args: [
-            'pr',
-            'list',
-            '--repo',
-            repo,
-            '--limit',
-            '100',
-            '--json',
-            'number,title,body,headRefName',
-          ],
-          cwd: process.cwd(),
-        });
-        if (prResult.code === 0) {
-          prs = JSON.parse(prResult.stdout) as RawPRSummary[];
-        } else {
-          throw new Error(prResult.stderr);
-        }
+        prs = await getRawPRs(repo);
       } catch (prError) {
         logger.error(`Failed to fetch pull requests in ${repo}`, 'supervisor', prError);
       }
 
       for (const item of issues) {
-        const labels = item.labels.map((l) => l.name);
-        const hasAgentLabel = labels.some((l) => l.startsWith('agent:'));
-
-        if (!hasAgentLabel) {
-          // Check if there is an active PR referencing this issue
-          const hasActivePR = prs.some((pr) => {
-            const issueRefRegex = new RegExp(`\\b#${item.number}\\b`);
-            const branchNameRef = `issue-${item.number}`;
-            return (
-              issueRefRegex.test(pr.title) ||
-              issueRefRegex.test(pr.body || '') ||
-              pr.headRefName.includes(branchNameRef)
-            );
-          });
-
-          if (hasActivePR) {
-            logger.info(
-              `Issue #${item.number} has no agent:* labels but has active PR referencing it. Skipping auto-assigning agent:spec.`,
-              'supervisor',
-            );
-            continue;
-          }
-
-          logger.info(
-            `Unlabeled Issue #${item.number} found. Assigning agent:spec...`,
-            'supervisor',
-          );
-          await updateIssueLabels(repo, item.number, ['agent:spec'], []);
-
-          const commentBody = `🤖 **Supervisor**: 新しい課題が検知されました。自動開発ワークフローを開始するため、仕様定義エージェント (\`agent:spec\`) を自動で割り当てます。壁打ち対話の開始をお待ちください。`;
-          const commentResult = await runCommand({
-            cmd: 'gh',
-            args: ['issue', 'comment', String(item.number), '--repo', repo, '--body', commentBody],
-            cwd: process.cwd(),
-          });
-          if (commentResult.code !== 0) {
-            throw new Error(commentResult.stderr);
-          }
-        }
+        await triageSingleIssue(repo, item, prs);
       }
     } catch (error) {
       logger.error(`Failed to triage unlabeled issues in ${repo}`, 'supervisor', error);
