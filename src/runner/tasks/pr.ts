@@ -1,11 +1,11 @@
-import type { AppConfig, GitHubPullRequest } from '../core/index.js';
-import type { Agent } from '../agents/index.js';
-import { logger } from '../core/index.js';
-import { updatePullRequestLabels, getPullRequest } from '../github/index.js';
-import { setupWorktree, cleanupWorktree } from './workspace.js';
+import type { AppConfig, GitHubPullRequest } from '../../core/index.js';
+import type { Agent } from '../../agents/index.js';
+import { logger } from '../../core/index.js';
+import { updatePullRequestLabels, getPullRequest } from '../../github/index.js';
+import { setupWorktree, cleanupWorktree } from '../workspace/index.js';
 import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './agent-cli.js';
-import * as tui from './tui.js';
+import { executeAgentCLI } from './cli.js';
+import * as tui from '../tui/index.js';
 
 /**
  * @what PRに対するエージェント処理を実行するためのオプション。

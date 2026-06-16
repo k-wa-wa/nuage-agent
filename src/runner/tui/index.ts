@@ -5,8 +5,8 @@ import {
   ScrollBoxRenderable,
   type CliRenderer,
 } from '@opentui/core';
-import { logger } from '../core/logger.js';
-import { buildHeaderText, buildPoolsText, buildTasksText, formatLogLine } from './tui-widgets.js';
+import { logger } from '../../core/logger.js';
+import { buildHeaderText, buildPoolsText, buildTasksText, formatLogLine } from './widgets.js';
 
 // ─── Public State ────────────────────────────────────────────────────────────
 

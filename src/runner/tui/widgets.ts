@@ -1,5 +1,5 @@
-import { conflictPool, nonConflictPool, getShuttingDown } from './pool.js';
-import { type TaskState, type TuiState } from './tui.js';
+import { conflictPool, nonConflictPool, getShuttingDown } from '../tasks/pool.js';
+import { type TaskState, type TuiState } from './index.js';
 
 /**
  * @what ヘッダーパネルに表示するテキストを生成します。

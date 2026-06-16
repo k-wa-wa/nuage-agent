@@ -1,5 +1,5 @@
-import type { AppConfig } from '../core/index.js';
-import { logger } from '../core/index.js';
+import type { AppConfig } from '../../core/index.js';
+import { logger } from '../../core/index.js';
 import {
   getIssuesWithLabel,
   updateIssueLabels,
@@ -9,7 +9,7 @@ import {
   getRawPRs,
   addIssueComment,
   addPullRequestComment,
-} from '../github/index.js';
+} from '../../github/index.js';
 
 interface RawIssueSummary {
   number: number;

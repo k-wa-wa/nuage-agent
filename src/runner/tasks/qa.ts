@@ -1,10 +1,10 @@
-import type { AppConfig } from '../core/index.js';
-import { logger } from '../core/index.js';
-import { QAGeneratorAgent } from '../agents/index.js';
-import { setupWorktree, cleanupWorktree } from './workspace.js';
+import type { AppConfig } from '../../core/index.js';
+import { logger } from '../../core/index.js';
+import { QAGeneratorAgent } from '../../agents/index.js';
+import { setupWorktree, cleanupWorktree } from '../workspace/index.js';
 import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './agent-cli.js';
-import * as tui from './tui.js';
+import { executeAgentCLI } from './cli.js';
+import * as tui from '../tui/index.js';
 
 export interface QATaskOptions {
   repo: string;
@@ -57,6 +57,7 @@ export async function runQAGeneratorTask(options: QATaskOptions): Promise<void> 
     );
 
     const taskNumber = 'qa-generator';
+    tui.taskQueued(key, repo, `QA Generator`); // Make sure we queue in TUI
     tui.taskStarted(key);
     const success = await executeQAGeneratorCLI(taskNumber, options);
     tui.taskFinished(key, success);

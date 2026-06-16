@@ -1,7 +1,7 @@
 import * as path from 'path';
-import type { AppConfig } from '../core/index.js';
-import type { Agent } from '../agents/index.js';
-import { logger, runCommand } from '../core/index.js';
+import type { AppConfig } from '../../core/index.js';
+import type { Agent } from '../../agents/index.js';
+import { logger, runCommand } from '../../core/index.js';
 
 /**
  * @what CLIの実行を構成するための内部パラメータ。

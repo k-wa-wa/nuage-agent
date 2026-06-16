@@ -1,10 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js';
-import type { Agent } from '../agents/index.js';
-import { agentsList } from '../agents/index.js';
-import { logger } from '../core/index.js';
-import * as tui from './tui.js';
+import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../../core/index.js';
+import type { Agent } from '../../agents/index.js';
+import { agentsList } from '../../agents/index.js';
+import { logger } from '../../core/index.js';
+import * as tui from '../tui/index.js';
 import {
   getIssueComments,
   updatePullRequestLabels,
@@ -12,11 +12,11 @@ import {
   getRecentIssues,
   getAllOpenIssues,
   getAllOpenPRs,
-} from '../github/index.js';
-import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from './pool.js';
-import { runIssueAgentTask } from './issue-runner.js';
-import { runPRAgentTask } from './pr-runner.js';
-import { runQAGeneratorTask } from './qa-runner.js';
+} from '../../github/index.js';
+import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from '../tasks/pool.js';
+import { runIssueAgentTask } from '../tasks/issue.js';
+import { runPRAgentTask } from '../tasks/pr.js';
+import { runQAGeneratorTask } from '../tasks/qa.js';
 
 /**
  * @what エージェントが並行プールで競合を引き起こすかどうかを判定します。
@@ -308,7 +308,6 @@ export class PipelineCrawler {
       return;
     }
     addTaskActive(key);
-    tui.taskQueued(key, repo, `QA Generator`);
 
     const repoMapMd = this.getRepoMapMd(repo);
     nonConflictPool.enqueue(() =>

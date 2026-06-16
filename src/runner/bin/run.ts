@@ -1,8 +1,8 @@
-import { loadConfig, logger } from '../core/index.js';
-import { PipelineCrawler } from './crawler.js';
-import { PipelineSupervisor } from './supervisor.js';
-import { registerShutdownHandlers } from './pool.js';
-import { initTui } from './tui.js';
+import { loadConfig, logger } from '../../core/index.js';
+import { PipelineCrawler } from '../core/crawler.js';
+import { PipelineSupervisor } from '../core/supervisor.js';
+import { registerShutdownHandlers } from '../tasks/pool.js';
+import { initTui } from '../tui/index.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

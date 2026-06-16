@@ -1,4 +1,4 @@
-import { logger } from '../core/index.js';
+import { logger } from '../../core/index.js';
 
 /**
  * @what シャットダウン中であるかどうかを示すフラグ。

@@ -1,11 +1,11 @@
-import type { AppConfig, GitHubIssue } from '../core/index.js';
-import type { Agent } from '../agents/index.js';
-import { logger } from '../core/index.js';
-import { updateIssueLabels, getIssue } from '../github/index.js';
-import { setupWorktree, cleanupWorktree } from './workspace.js';
+import type { AppConfig, GitHubIssue } from '../../core/index.js';
+import type { Agent } from '../../agents/index.js';
+import { logger } from '../../core/index.js';
+import { updateIssueLabels, getIssue } from '../../github/index.js';
+import { setupWorktree, cleanupWorktree } from '../workspace/index.js';
 import { removeTaskActive } from './pool.js';
-import { executeAgentCLI } from './agent-cli.js';
-import * as tui from './tui.js';
+import { executeAgentCLI } from './cli.js';
+import * as tui from '../tui/index.js';
 
 /**
  * @what Issueに対するエージェント処理を実行するためのオプション。
@@ -21,7 +21,7 @@ export interface IssueTaskOptions {
 
 /**
  * @what 最新のIssueラベルを取得し、実行可能か（ロック中やユーザー返答待ちでないか）検証します。
- * @why 分散実行時の二重実行防止（排他制御）を厳密に行うため。
+ * @why 分散実行時の二重実行防止（排ため制御）を厳密に行うため。
  */
 async function performIssueLockCheck(
   repo: string,

@@ -1,5 +1,5 @@
-import { loadConfig, logger } from '../core/index.js';
-import { ensureLabelsExist } from '../github/index.js';
+import { loadConfig, logger } from '../../core/index.js';
+import { ensureLabelsExist } from '../../github/index.js';
 
 /**
  * @what 設定ファイルで指定されたリポジトリそれぞれに対して、GitHub 上で必要なパイプライン状態ラベルの一括作成処理を実行します。

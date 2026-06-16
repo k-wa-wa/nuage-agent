@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import type { AppConfig } from '../core/index.js';
-import { logger } from '../core/index.js';
+import type { AppConfig } from '../../core/index.js';
+import { logger } from '../../core/index.js';
 
 /**
  * @what ワークツリーを作成・初期化する際の詳細な設定オプションインターフェース。
