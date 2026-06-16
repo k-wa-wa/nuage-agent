@@ -2,6 +2,7 @@ import { loadConfig, logger } from '../core/index.js';
 import { PipelineCrawler } from './crawler.js';
 import { PipelineSupervisor } from './supervisor.js';
 import { registerShutdownHandlers } from './pool.js';
+import { initTui } from './tui.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,6 +34,11 @@ async function main() {
     await crawler.crawlCycle();
     logger.info('Single cycle finished. Exiting.', 'main');
     process.exit(0);
+  }
+
+  const useTui = process.stdout.isTTY && !process.argv.includes('--no-tui');
+  if (useTui) {
+    await initTui();
   }
 
   logger.info(

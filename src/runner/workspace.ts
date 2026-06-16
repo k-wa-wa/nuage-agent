@@ -13,6 +13,7 @@ export interface WorktreeOptions {
   taskNumber: number | string;
   branchName: string;
   isPR: boolean;
+  prNumber?: number;
 }
 
 /**
@@ -134,34 +135,25 @@ export function getDefaultBranch(baseDir: string): string {
  * @what PR用のデタッチドワークツリーを作成し、PRのコミットをチェックアウトします。
  * @why PRブランチをクリーンな隔離環境にチェックアウトしてテストや検証を行うため。
  */
-function setupWorktreePR(
-  baseDir: string,
-  taskDir: string,
-  taskNumber: number | string,
-  defaultBranch: string,
-): void {
-  logger.info(`Creating detached worktree at ${taskDir} for PR #${taskNumber}...`, 'workspace');
-  const addResult = spawnSync(
-    'git',
-    ['worktree', 'add', '--detach', taskDir, `origin/${defaultBranch}`],
-    {
-      cwd: baseDir,
-      stdio: 'ignore',
-      shell: false,
-    },
-  );
-  if (addResult.status !== 0) {
-    throw new Error(`Failed to create worktree for PR #${taskNumber}`);
-  }
-
-  logger.info(`Checking out PR #${taskNumber} in worktree...`, 'workspace');
-  const checkoutResult = spawnSync('gh', ['pr', 'checkout', String(taskNumber)], {
-    cwd: taskDir,
+function setupWorktreePR(baseDir: string, taskDir: string, prNumber: number | string): void {
+  logger.info(`Fetching PR #${prNumber} from origin...`, 'workspace');
+  const fetchResult = spawnSync('git', ['fetch', 'origin', `pull/${prNumber}/head`], {
+    cwd: baseDir,
     stdio: 'ignore',
     shell: false,
   });
-  if (checkoutResult.status !== 0) {
-    throw new Error(`Failed to checkout PR #${taskNumber} inside worktree`);
+  if (fetchResult.status !== 0) {
+    throw new Error(`Failed to fetch PR #${prNumber} from origin`);
+  }
+
+  logger.info(`Creating detached worktree at ${taskDir} for PR #${prNumber}...`, 'workspace');
+  const addResult = spawnSync('git', ['worktree', 'add', '--detach', taskDir, 'FETCH_HEAD'], {
+    cwd: baseDir,
+    stdio: 'ignore',
+    shell: false,
+  });
+  if (addResult.status !== 0) {
+    throw new Error(`Failed to create worktree for PR #${prNumber} at FETCH_HEAD`);
   }
 }
 
@@ -202,7 +194,7 @@ function setupWorktreeBranch(
  * @why 複数のエージェントが異なるタスクを並列して実行する際、ファイル変更、ブランチ切り替え、ローカルビルドファイル等の競合を完全に防ぐため。
  */
 export function setupWorktree(config: AppConfig, options: WorktreeOptions): string {
-  const { repo, taskNumber, branchName, isPR } = options;
+  const { repo, taskNumber, branchName, isPR, prNumber } = options;
   const repoFolder = repo.split('/').pop() ?? repo;
   const baseDir = ensureBaseRepo(repo, config);
   const taskDir = path.resolve(config.workspacesDir, repoFolder, `task-${taskNumber}`);
@@ -222,7 +214,7 @@ export function setupWorktree(config: AppConfig, options: WorktreeOptions): stri
   spawnSync('git', ['pull'], { cwd: baseDir, stdio: 'ignore', shell: false });
 
   if (isPR) {
-    setupWorktreePR(baseDir, taskDir, taskNumber, defaultBranch);
+    setupWorktreePR(baseDir, taskDir, prNumber ?? taskNumber);
   } else {
     setupWorktreeBranch(baseDir, taskDir, branchName, defaultBranch);
   }

@@ -1,8 +1,7 @@
-import { test } from 'node:test';
-import assert from 'node:assert';
+import { test, expect } from 'bun:test';
 import { TaskPool } from './pool.js';
 
-void test('TaskPool concurrency limit of 1 runs tasks sequentially', async () => {
+test('TaskPool concurrency limit of 1 runs tasks sequentially', async () => {
   const pool = new TaskPool(1);
   const executionOrder: number[] = [];
 
@@ -27,10 +26,10 @@ void test('TaskPool concurrency limit of 1 runs tasks sequentially', async () =>
 
   await pool.waitForCompletion();
 
-  assert.deepStrictEqual(executionOrder, [1, 2]);
+  expect(executionOrder).toEqual([1, 2]);
 });
 
-void test('TaskPool concurrency limit of 2 runs tasks concurrently', async () => {
+test('TaskPool concurrency limit of 2 runs tasks concurrently', async () => {
   const pool = new TaskPool(2);
   const executionOrder: number[] = [];
 
@@ -57,5 +56,5 @@ void test('TaskPool concurrency limit of 2 runs tasks concurrently', async () =>
 
   // Task 2 finishes faster than Task 1 even though Task 1 started first,
   // because they run concurrently.
-  assert.deepStrictEqual(executionOrder, [2, 1]);
+  expect(executionOrder).toEqual([2, 1]);
 });

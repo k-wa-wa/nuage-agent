@@ -4,6 +4,7 @@ import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js
 import type { Agent } from '../agents/index.js';
 import { agentsList } from '../agents/index.js';
 import { logger } from '../core/index.js';
+import * as tui from './tui.js';
 import {
   getIssueComments,
   updatePullRequestLabels,
@@ -13,7 +14,8 @@ import {
   getAllOpenPRs,
 } from '../github/index.js';
 import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from './pool.js';
-import { runIssueAgentTask, runPRAgentTask, runQAGeneratorTask } from './task-runner.js';
+import { runIssueAgentTask, runPRAgentTask } from './task-runner.js';
+import { runQAGeneratorTask } from './qa-runner.js';
 
 /**
  * @what エージェントが並行プールで競合を引き起こすかどうかを判定します。
@@ -106,6 +108,9 @@ export class PipelineCrawler {
    * @why 定期的に GitHub の更新をポーリングし、新しい `agent:*` ラベルをトリガーにして適切な自律エージェントを連続して呼び出すため。
    */
   public async crawlCycle(): Promise<void> {
+    tui.setRepos(this.config.repositories);
+    tui.setLastCrawlTime(new Date());
+
     if (this.isRunning) {
       logger.info('Previous crawl cycle still running. Skipping...', 'crawler');
       return;
@@ -150,6 +155,7 @@ export class PipelineCrawler {
         continue;
       }
       addTaskActive(key);
+      tui.taskQueued(key, repo, `Agent: ${agent.id} on Issue #${issue.number}`);
 
       const pool = isConflictAgent(agent.id) ? conflictPool : nonConflictPool;
       const repoMapMd = this.getRepoMapMd(repo);
@@ -175,6 +181,7 @@ export class PipelineCrawler {
         continue;
       }
       addTaskActive(key);
+      tui.taskQueued(key, repo, `Agent: ${agent.id} on PR #${pr.number}`);
 
       const pool = isConflictAgent(agent.id) ? conflictPool : nonConflictPool;
       const repoMapMd = this.getRepoMapMd(repo);
@@ -300,6 +307,7 @@ export class PipelineCrawler {
       return;
     }
     addTaskActive(key);
+    tui.taskQueued(key, repo, `QA Generator`);
 
     const repoMapMd = this.getRepoMapMd(repo);
     nonConflictPool.enqueue(() =>

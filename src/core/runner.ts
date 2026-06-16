@@ -59,7 +59,7 @@ function handleStreamData(
   if (options.logStream) {
     options.logStream.write(chunk);
   }
-  if (!options.silentStdout) {
+  if (options.silentStdout === false) {
     if (options.isStderr) {
       process.stderr.write(chunk);
     } else {

@@ -1,7 +1,6 @@
 import * as path from 'path';
 import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../core/index.js';
 import type { Agent } from '../agents/index.js';
-import { QAGeneratorAgent } from '../agents/index.js';
 import { logger, runCommand } from '../core/index.js';
 import {
   updateIssueLabels,
@@ -11,6 +10,7 @@ import {
 } from '../github/index.js';
 import { setupWorktree, cleanupWorktree } from './workspace.js';
 import { removeTaskActive } from './pool.js';
+import * as tui from './tui.js';
 
 /**
  * @what Issueに対するエージェント処理を実行するためのオプション。
@@ -37,21 +37,10 @@ export interface PRTaskOptions {
 }
 
 /**
- * @what QA Generatorタスクを実行するためのオプション。
- * @why 関数のパラメータ数を上限（4個）以内に抑えて可読性を高めるため。
- */
-export interface QATaskOptions {
-  repo: string;
-  config: AppConfig;
-  repoMapMd: string;
-  prefix: string;
-}
-
-/**
  * @what CLIの実行を構成するための内部パラメータ。
  * @why パラメータ数を減らし、シグネチャを簡素に保つため。
  */
-interface CLIExecutionOptions {
+export interface CLIExecutionOptions {
   agent: Agent;
   prompt: string;
   workspacePath: string;
@@ -129,24 +118,12 @@ async function performPRLockCheck(
  */
 function createProgressCallback(repoFolder: string, taskNumber: string, agentId: string) {
   let lastLoggedAction = '';
-  const progressPatterns = [
-    /thinking/i,
-    /calling tool/i,
-    /tool call/i,
-    /executing/i,
-    /tool response/i,
-    /tool result/i,
-  ];
+  const pat = /thinking|calling tool|tool call|executing|tool response|tool result/i;
   return (line: string) => {
     const trimmed = line.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (progressPatterns.some((pat) => pat.test(trimmed))) {
-      if (trimmed !== lastLoggedAction) {
-        lastLoggedAction = trimmed;
-        logger.info(`[${repoFolder}#${taskNumber} (${agentId})]: ${trimmed}`, 'progress');
-      }
+    if (trimmed && pat.test(trimmed) && trimmed !== lastLoggedAction) {
+      lastLoggedAction = trimmed;
+      logger.info(`[${repoFolder}#${taskNumber} (${agentId})]: ${trimmed}`, 'progress');
     }
   };
 }
@@ -189,7 +166,7 @@ async function handleCLIError(error: unknown, fbOpts: FallbackOptions): Promise<
  * @what 指定されたエージェントの指示プロンプトを引数として LLM CLI に渡し、実行を開始します。
  * @why 複数行に及ぶプロンプトを安全に引き渡し、進捗出力をフィルタリングしてコンソールに表示するため。
  */
-async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptions): Promise<void> {
+export async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptions): Promise<void> {
   const { agent, prompt, workspacePath, taskNumber } = opts;
   const isClaude = agent.commandType === 'claude';
   const cmd = isClaude ? config.claudeCommand : config.geminiCommand;
@@ -227,7 +204,7 @@ async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptions): Pr
  * @what Issueに対応するworktreeを作成し、エージェントCLIを実行して後片付けを行います。
  * @why 隔離環境下でエージェントを安全に実行し、実行完了後に状態を更新するため。
  */
-async function executeIssueCLI(taskNumber: string, options: IssueTaskOptions): Promise<void> {
+async function executeIssueCLI(taskNumber: string, options: IssueTaskOptions): Promise<boolean> {
   const { repo, agent, issue, config, repoMapMd } = options;
   const branchName = `agent/issue-${issue.number}`;
   let workspacePath = '';
@@ -255,19 +232,26 @@ async function executeIssueCLI(taskNumber: string, options: IssueTaskOptions): P
       'crawler',
     );
   }
+  return success;
 }
 
 /**
  * @what PRに対応するworktreeを作成し、エージェントCLIを実行して後片付けを行います。
  * @why 隔離環境下でPRブランチを検証し、実行完了後に状態を更新するため。
  */
-async function executePRCLI(taskNumber: string, options: PRTaskOptions): Promise<void> {
+async function executePRCLI(taskNumber: string, options: PRTaskOptions): Promise<boolean> {
   const { repo, agent, pr, config, repoMapMd } = options;
   let workspacePath = '';
   let success = true;
 
   try {
-    workspacePath = setupWorktree(config, { repo, taskNumber, branchName: pr.branch, isPR: true });
+    workspacePath = setupWorktree(config, {
+      repo,
+      taskNumber,
+      branchName: pr.branch,
+      isPR: true,
+      prNumber: pr.number,
+    });
     const context = { repoName: repo, repoMapMd, pr, autoMerge: config.qaAutoMerge };
     const prompt = agent.buildPrompt(context);
 
@@ -288,32 +272,7 @@ async function executePRCLI(taskNumber: string, options: PRTaskOptions): Promise
       'crawler',
     );
   }
-}
-
-/**
- * @what QA Generator用ブランチのワークツリーを作成し、CLIを実行して後片付けを行います。
- * @why 隔離環境下でQA提案Issue作成コマンドを実行し、完了後に作業資源を解放するため。
- */
-async function executeQAGeneratorCLI(taskNumber: string, options: QATaskOptions): Promise<void> {
-  const { repo, config, repoMapMd, prefix } = options;
-  let workspacePath = '';
-
-  try {
-    const branchName = 'agent/qa-generator';
-    workspacePath = setupWorktree(config, { repo, taskNumber, branchName, isPR: false });
-    const context = { repoName: repo, repoMapMd };
-    const agent = new QAGeneratorAgent(prefix);
-    const prompt = agent.buildPrompt(context);
-
-    await executeAgentCLI(config, { agent, prompt, workspacePath, taskNumber });
-    logger.success(`QA Generator Agent completed successfully.`, 'crawler');
-  } catch (error) {
-    logger.error(`Failed to run QA Generator Agent on ${repo}`, 'crawler', error);
-  } finally {
-    if (workspacePath) {
-      cleanupWorktree(repo, taskNumber, config);
-    }
-  }
+  return success;
 }
 
 /**
@@ -341,7 +300,9 @@ export async function runIssueAgentTask(options: IssueTaskOptions): Promise<void
     await updateIssueLabels(repo, issue.number, ['agent:running'], []);
 
     const taskNumber = `${issue.number}-${agent.id}`;
-    await executeIssueCLI(taskNumber, options);
+    tui.taskStarted(key);
+    const success = await executeIssueCLI(taskNumber, options);
+    tui.taskFinished(key, success);
   } finally {
     removeTaskActive(key);
   }
@@ -372,28 +333,9 @@ export async function runPRAgentTask(options: PRTaskOptions): Promise<void> {
     await updatePullRequestLabels(repo, pr.number, ['agent:running'], []);
 
     const taskNumber = `${pr.number}-${agent.id}`;
-    await executePRCLI(taskNumber, options);
-  } finally {
-    removeTaskActive(key);
-  }
-}
-
-/**
- * @what QA Generatorエージェントのライフサイクル全体の実行を制御します。
- * @why 隔離環境確保、CLI起動による自動起票、および後片付けを一貫して行うため。
- */
-export async function runQAGeneratorTask(options: QATaskOptions): Promise<void> {
-  const { repo } = options;
-  const key = `${repo}#qa-generator`;
-
-  try {
-    logger.info(
-      `Starting Proactive QA Generator Agent (QAGeneratorAgent) for ${repo}...`,
-      'crawler',
-    );
-
-    const taskNumber = 'qa-generator';
-    await executeQAGeneratorCLI(taskNumber, options);
+    tui.taskStarted(key);
+    const success = await executePRCLI(taskNumber, options);
+    tui.taskFinished(key, success);
   } finally {
     removeTaskActive(key);
   }

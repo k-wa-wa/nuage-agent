@@ -5,17 +5,17 @@
   "type": "module",
   "description": "Automated development pipeline using LLM CLIs and GitHub Issues.",
   "scripts": {
-    "dev:runner": "tsx src/runner/index.ts",
+    "dev:runner": "bun run src/runner/index.ts",
     "build": "tsc",
     "build:ci": "pnpm build && pnpm lint && pnpm format:check",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
     "format:check": "prettier --check \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "bun test",
     "sandbox:setup": "bash scripts/setup-sandbox.sh",
     "sandbox:run": "pnpm dev:runner -- --repo-map-dir ./repo-map/sandbox --auto-merge",
-    "labels:create": "tsx src/runner/create-labels-cli.ts"
+    "labels:create": "bun run src/runner/create-labels-cli.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -25,8 +25,10 @@
     "eslint-plugin-tsdoc": "^0.5.2",
     "jiti": "^2.7.0",
     "prettier": "^3.4.2",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.61.0"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.4.1"
   }
 }
