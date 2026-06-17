@@ -4,6 +4,9 @@
 
 対象となるリポジトリ（`nuage-cluster`, `pechka` など）を定期的にクロールし、Issue/PRラベルとコメントをトリガーとして、仕様定義・開発・コードレビュー・QAの各エージェントを自動的にシェル経由で起動・実行する。
 
+> [!IMPORTANT]
+> 開発やプロンプトの修正にあたっては、必ず事前に [docs/development-rules.md](docs/development-rules.md) を読み、その指示を厳守すること。
+
 ---
 
 ## 主な特徴
