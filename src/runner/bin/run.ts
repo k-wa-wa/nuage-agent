@@ -5,6 +5,10 @@ import { registerShutdownHandlers } from '../tasks/pool.js';
 import { initTui } from '../tui/index.js';
 import { getViewerLogin } from '../../github/index.js';
 
+/**
+ * @what 指定されたミリ秒数だけ非同期プロセスを停止するスリープ関数。
+ * @why ポーリングループでクローラー実行間に待機時間を挟むため。
+ */
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**

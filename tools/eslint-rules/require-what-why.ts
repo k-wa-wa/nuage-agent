@@ -2,7 +2,8 @@ import type { Rule } from 'eslint';
 
 /**
  * @what Custom ESLint rule that requires @what and @why TSDoc tags on every exported
- *       function/class declaration AND every class method (public or private).
+ *       function/class declaration, every top-level non-exported function/class/variable holding functions,
+ *       AND every class method (public or private).
  * @why Inline custom rule avoids external dependencies and ensures the "why" context
  *      standard is enforced at the lint stage rather than at review time.
  */
@@ -11,7 +12,7 @@ const requireWhatWhy: Rule.RuleModule = {
     type: 'suggestion',
     docs: {
       description:
-        'Require @what and @why TSDoc tags on exported functions/classes and all class methods',
+        'Require @what and @why TSDoc tags on exported functions/classes, top-level non-exported functions/classes, and all class methods',
     },
     schema: [],
     messages: {
@@ -111,6 +112,36 @@ const requireWhatWhy: Rule.RuleModule = {
     }
 
     /**
+     * @what Checks non-exported top-level declarations (functions, classes, variables holding functions).
+     * @why Enforces the @what/@why contract on module-local top-level declarations to keep script entrypoints and helper modules well-documented.
+     */
+    function checkNonExportedDeclaration(node: Rule.Node) {
+      if (node.parent?.type !== 'Program') {
+        return;
+      }
+
+      if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') {
+        checkNode(node);
+      } else if (node.type === 'VariableDeclaration') {
+        const varNode = node as unknown as {
+          declarations?: {
+            init?: {
+              type: string;
+            };
+          }[];
+        };
+        const hasFunction = varNode.declarations?.some(
+          (d) =>
+            d.init &&
+            (d.init.type === 'ArrowFunctionExpression' || d.init.type === 'FunctionExpression'),
+        );
+        if (hasFunction) {
+          checkNode(node);
+        }
+      }
+    }
+
+    /**
      * @what Checks every MethodDefinition inside a class body (constructor excluded).
      * @why Class methods carry non-trivial logic and design decisions regardless of
      *      whether they are public or private, so they must also be documented with
@@ -128,7 +159,9 @@ const requireWhatWhy: Rule.RuleModule = {
     return {
       ExportNamedDeclaration: checkExport,
       ExportDefaultDeclaration: checkExport,
-      // Check all class methods (public, private, protected, static)
+      FunctionDeclaration: checkNonExportedDeclaration,
+      ClassDeclaration: checkNonExportedDeclaration,
+      VariableDeclaration: checkNonExportedDeclaration,
       MethodDefinition: checkMethod,
     };
   },

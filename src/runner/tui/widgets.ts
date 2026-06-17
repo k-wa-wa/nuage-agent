@@ -18,6 +18,10 @@ export function buildHeaderText(state: TuiState): string {
   );
 }
 
+/**
+ * @what 現在値と最大値に基づいて、視覚的な進行状況バー文字列を生成する。
+ * @why TUIの画面上でプールの占有率をゲージとしてわかりやすく可視化するため。
+ */
 function drawBar(val: number, max: number): string {
   const filled = '█'.repeat(val);
   const empty = '░'.repeat(Math.max(0, max - val));
@@ -40,6 +44,10 @@ export function buildPoolsText(): string {
   );
 }
 
+/**
+ * @what タスクの状態（queued, running, completed, failed）に応じた表示文字列を整形する。
+ * @why TUIパネルのタスク一覧において、経過時間やエラー内容を含めてステータスを表示するため。
+ */
 function formatTaskStatus(t: TaskState): string {
   if (t.status === 'queued') {
     return 'QUEUED';

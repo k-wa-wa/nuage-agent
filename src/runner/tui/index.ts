@@ -52,6 +52,10 @@ let drawInterval: NodeJS.Timeout | null = null;
 const ACCENT = '#00d4ff';
 const BG_PANEL = '#0d1117';
 
+/**
+ * @what TUIのヘッダー情報を表示するためのレンダラオブジェクトを作成し、コンポーネントを初期化する。
+ * @why ダッシュボード最上部にステータスや稼働時間などの稼働概況を表示するため。
+ */
 function buildHeaderPanel(ctx: CliRenderer): TextRenderable {
   const box = new BoxRenderable(ctx, {
     width: '100%',
@@ -77,6 +81,10 @@ function buildHeaderPanel(ctx: CliRenderer): TextRenderable {
   return text;
 }
 
+/**
+ * @what 並列処理プールの動作状態（ ConflictPool と NonConflictPool ）を可視化するためのパネルコンポーネントを作成する。
+ * @why シーケンシャル処理および並行処理のキューおよびアクティブ状態をゲージとして描画するため。
+ */
 function buildPoolsPanel(ctx: CliRenderer): TextRenderable {
   const box = new BoxRenderable(ctx, {
     width: '100%',
@@ -101,6 +109,10 @@ function buildPoolsPanel(ctx: CliRenderer): TextRenderable {
   return text;
 }
 
+/**
+ * @what 登録されたタスクの進捗状況および最近の完了一覧（最大7件）を表示するパネルコンポーネントを作成する。
+ * @why 各リポジトリでどのエージェントタスクが現在どのような状態（QUEUED/RUNNING/SUCCESS/FAILED）であるかを一覧表示するため。
+ */
 function buildTasksPanel(ctx: CliRenderer): TextRenderable {
   const box = new BoxRenderable(ctx, {
     width: '100%',
@@ -126,6 +138,10 @@ function buildTasksPanel(ctx: CliRenderer): TextRenderable {
   return text;
 }
 
+/**
+ * @what 標準ログおよびデバッグログをリアルタイムで出力し、自動スクロールが可能なログパネルコンポーネントを作成する。
+ * @why コンソールへの標準出力ログをTUI上のスクロール可能領域にマッピングして表示し、進行状況を確認できるようにするため。
+ */
 function buildLogsPanel(ctx: CliRenderer): {
   scroll: ScrollBoxRenderable;
   text: TextRenderable;
@@ -160,6 +176,10 @@ function buildLogsPanel(ctx: CliRenderer): {
 const TUI_LOG_MAX_LINE = 200;
 const TUI_LOG_MAX_LINES = 200;
 
+/**
+ * @what システムの共通ロガーに対してリスナーをフックし、出力されるログ行をTUIの状態データへ追加する。
+ * @why TUIパネルのログビュー領域に最新のログ履歴を自動反映させるため。
+ */
 function setupLoggerHook(): void {
   const listener = (level: string, msg: string, err?: unknown) => {
     const truncMsg = msg.length > TUI_LOG_MAX_LINE ? `${msg.slice(0, TUI_LOG_MAX_LINE)}…` : msg;
@@ -174,6 +194,10 @@ function setupLoggerHook(): void {
 
 // ─── Draw Loop ────────────────────────────────────────────────────────────────
 
+/**
+ * @what TUI状態データ（tuiState）の最新値に基づいて、各描画コンポーネントの表示内容を更新し画面に再描画要求を送る。
+ * @why 500ms周期の定期タイマーおよび状態更新イベントに連動して、ダッシュボード全体を最新表示に保つため。
+ */
 function draw(): void {
   if (!renderer) {
     return;
