@@ -61,7 +61,12 @@ export class ClaudeRunner implements AIAgentRunner {
  */
 export class AntigravityRunner implements AIAgentRunner {
   readonly id = 'antigravity';
-  static readonly candidates = ['agy', 'antigravity', '~/.local/bin/agy', '~/.local/bin/antigravity'];
+  static readonly candidates = [
+    'agy',
+    'antigravity',
+    '~/.local/bin/agy',
+    '~/.local/bin/antigravity',
+  ];
   private readonly commandPath: string;
 
   constructor() {
@@ -100,9 +105,7 @@ export class AntigravityRunner implements AIAgentRunner {
  */
 export function resolveCommandPath(candidates: string[]): string {
   for (const candidate of candidates) {
-    const expanded = candidate.startsWith('~/')
-      ? candidate.replace('~', os.homedir())
-      : candidate;
+    const expanded = candidate.startsWith('~/') ? candidate.replace('~', os.homedir()) : candidate;
 
     if (path.isAbsolute(expanded) || expanded.includes('/')) {
       if (fs.existsSync(expanded)) {
