@@ -4,10 +4,6 @@ export interface AppConfig {
   repositories: string[]; // YAMLから読み込まれるリポジトリリスト
   repoMapDir: string; // repo-mapディレクトリへのパス
   pollingIntervalSeconds: number;
-  claudeCommand: string;
-  claudeFlags: string[];
-  geminiCommand: string;
-  geminiFlags: string[];
   workspacesDir: string;
   qaAutoMerge: boolean;
   qaIssueIntervalMinutes: number;

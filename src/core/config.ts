@@ -6,10 +6,6 @@ import { logger } from './logger.js';
 
 // --- SYSTEM STATIC CONSTANTS ---
 export const DEFAULT_POLLING_INTERVAL_SECONDS = 60;
-export const DEFAULT_CLAUDE_COMMAND = '~/.local/bin/claude';
-export const DEFAULT_CLAUDE_FLAGS = ['--dangerously-skip-permissions'];
-export const DEFAULT_GEMINI_COMMAND = '~/.local/bin/agy';
-export const DEFAULT_GEMINI_FLAGS = ['--dangerously-skip-permissions'];
 export const DEFAULT_WORKSPACES_DIR_NAME = 'workspaces';
 
 /**
@@ -101,10 +97,6 @@ export function loadConfig(): AppConfig {
       repositories,
       repoMapDir,
       pollingIntervalSeconds: DEFAULT_POLLING_INTERVAL_SECONDS,
-      claudeCommand: DEFAULT_CLAUDE_COMMAND,
-      claudeFlags: DEFAULT_CLAUDE_FLAGS,
-      geminiCommand: DEFAULT_GEMINI_COMMAND,
-      geminiFlags: DEFAULT_GEMINI_FLAGS,
       workspacesDir: path.resolve(rootDir, DEFAULT_WORKSPACES_DIR_NAME),
       qaAutoMerge: autoMerge,
       qaIssueIntervalMinutes: qaInterval,

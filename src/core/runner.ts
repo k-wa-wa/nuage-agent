@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess, type StdioOptions } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from './logger.js';
@@ -11,6 +11,7 @@ export interface RunCommandOptions {
   logFilePath?: string;
   silentStdout?: boolean;
   onProgress?: (line: string) => void;
+  stdio?: 'inherit' | 'pipe';
 }
 
 export interface RunCommandResult {
@@ -78,55 +79,89 @@ function handleStreamData(
   }
 }
 
+interface StreamStates {
+  stdoutState: { content: string; buffer: string };
+  stderrState: { content: string; buffer: string };
+}
+
 /**
- * @what 指定されたコマンドを子プロセスとして実行し、標準出力・標準エラー出力・終了コードを取得します。
- * @why 各種エージェントや git/gh CLI コマンドを、非同期かつストリーミング処理で安全に実行するため。
+ * @what 子プロセスの標準出力および標準エラー出力を受け取るストリームリスナーをセットアップします。
+ * @why runCommand 関数の行数を削減し、ストリームハンドリングの関心を別関数に分離するため。
  */
-export function runCommand(options: RunCommandOptions): Promise<RunCommandResult> {
-  const { cmd, args, cwd, env, logFilePath, silentStdout, onProgress } = options;
-  logger.info(`Executing CLI: ${cmd} ${args.join(' ')}`, 'runner');
-
-  return new Promise((resolve, reject) => {
-    const normalizedCmd = cmd.startsWith('~/') ? cmd.replace('~', process.env.HOME ?? '') : cmd;
-    const logFileStream = createLogStream(logFilePath);
-
-    const child = spawn(normalizedCmd, args, {
-      cwd,
-      shell: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, ...env },
-    });
-
-    const stdoutState = { content: '', buffer: '' };
-    const stderrState = { content: '', buffer: '' };
-
+function setupChildProcessStreams(
+  child: ChildProcess,
+  states: StreamStates,
+  options: {
+    logFileStream?: fs.WriteStream;
+    silentStdout?: boolean;
+    onProgress?: (line: string) => void;
+  },
+): void {
+  const { logFileStream, silentStdout, onProgress } = options;
+  if (child.stdout) {
     child.stdout.on('data', (data: Buffer) => {
-      handleStreamData(data, stdoutState, {
+      handleStreamData(data, states.stdoutState, {
         logStream: logFileStream,
         silentStdout,
         onProgress,
         isStderr: false,
       });
     });
+  }
 
+  if (child.stderr) {
     child.stderr.on('data', (data: Buffer) => {
-      handleStreamData(data, stderrState, {
+      handleStreamData(data, states.stderrState, {
         logStream: logFileStream,
         silentStdout,
         onProgress,
         isStderr: true,
       });
     });
+  }
+}
 
-    child.on('close', (code) => {
+/**
+ * @what 指定されたコマンドを子プロセスとして実行し、標準出力・標準エラー出力・終了コードを取得します。
+ * @why 各種エージェントや git/gh CLI コマンドを、非同期かつストリーミング処理で安全に実行するため。
+ */
+export function runCommand(options: RunCommandOptions): Promise<RunCommandResult> {
+  const { cmd, args, cwd, env, logFilePath, silentStdout, onProgress, stdio } = options;
+  logger.info(`Executing CLI: ${cmd} ${args.join(' ')}`, 'runner');
+
+  return new Promise((resolve, reject) => {
+    const normalizedCmd = cmd.startsWith('~/') ? cmd.replace('~', process.env.HOME ?? '') : cmd;
+    const logFileStream = createLogStream(logFilePath);
+
+    const stdioOpt: StdioOptions = stdio === 'inherit' ? 'inherit' : ['ignore', 'pipe', 'pipe'];
+
+    const child: ChildProcess = spawn(normalizedCmd, args, {
+      cwd,
+      shell: false,
+      stdio: stdioOpt,
+      env: { ...process.env, ...env },
+    });
+
+    const states: StreamStates = {
+      stdoutState: { content: '', buffer: '' },
+      stderrState: { content: '', buffer: '' },
+    };
+
+    setupChildProcessStreams(child, states, {
+      logFileStream,
+      silentStdout,
+      onProgress,
+    });
+
+    child.on('close', (code: number | null) => {
       if (logFileStream) {
         logFileStream.end();
       }
       logger.info(`CLI process exited with code ${code}`, 'runner');
-      resolve({ stdout: stdoutState.content, stderr: stderrState.content, code });
+      resolve({ stdout: states.stdoutState.content, stderr: states.stderrState.content, code });
     });
 
-    child.on('error', (err) => {
+    child.on('error', (err: Error) => {
       if (logFileStream) {
         logFileStream.end();
       }

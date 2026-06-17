@@ -1,3 +1,4 @@
+import { ClaudeRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
@@ -7,7 +8,7 @@ import type { Agent, AgentContext } from '../types.js';
 export class DevAgent implements Agent {
   readonly id = 'dev';
   readonly label = 'agent:dev';
-  readonly commandType = 'claude';
+  readonly runner = new ClaudeRunner();
 
   /**
    * @what 開発フェーズのエージェント（DevAgent）を初期化します。

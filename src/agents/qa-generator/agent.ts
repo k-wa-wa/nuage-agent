@@ -1,3 +1,4 @@
+import { ClaudeRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
@@ -9,7 +10,7 @@ export class QAGeneratorAgent implements Agent {
   readonly id = 'qa-generator';
   readonly targetType = 'issue';
   readonly label = ''; // Proactive agent, not reactive to any label
-  readonly commandType = 'claude';
+  readonly runner = new ClaudeRunner();
   private prefix: string;
 
   constructor(prefix: string) {

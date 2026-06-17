@@ -1,4 +1,4 @@
-import type { GitHubIssue, GitHubPullRequest } from '../core/index.js';
+import type { GitHubIssue, GitHubPullRequest, AIAgentRunner } from '../core/index.js';
 
 export interface AgentContext {
   repoName: string;
@@ -12,7 +12,7 @@ export interface Agent {
   readonly id: string; // 例: 'spec', 'dev', 'review-general', 'review-semantic', 'qa'
   readonly targetType: 'issue' | 'pr';
   readonly label: string; // 例: 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'
-  readonly commandType: 'claude' | 'gemini';
+  readonly runner: AIAgentRunner;
 
   /**
    * @what エージェント実行のためのシステム・指示プロンプトをコンテキスト情報から組み立てます。

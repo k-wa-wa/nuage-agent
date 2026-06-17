@@ -1,3 +1,4 @@
+import { ClaudeRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
@@ -8,7 +9,7 @@ export class ReviewSemanticAgent implements Agent {
   readonly id = 'review-semantic';
   readonly targetType = 'pr';
   readonly label = 'agent:review';
-  readonly commandType = 'claude';
+  readonly runner = new ClaudeRunner();
 
   /**
    * @what 意味的/設計規約レビューエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。

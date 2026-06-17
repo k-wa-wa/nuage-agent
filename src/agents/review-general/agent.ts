@@ -1,18 +1,19 @@
+import { AntigravityRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
  * @what 一般レビューフェーズのエージェント（ReviewGeneralAgent）としての指示プロンプトを構築します。
- * @why バグ、構文エラー、一般的なセキュリティ脆弱性やパフォーマンス問題（N+1問題など）を検知し、PRの合格・差し戻しを判定するレビュー観点を与えるため。
+ * @why 一般的なセキュリティ脆弱性やパフォーマンス問題（N+1問題など）を検知し、PRの合格・差し戻しを判定するレビュー観点を与えるため。
  */
 export class ReviewGeneralAgent implements Agent {
   readonly id = 'review-general';
   readonly targetType = 'pr';
   readonly label = 'agent:review';
-  readonly commandType = 'gemini';
+  readonly runner = new AntigravityRunner();
 
   /**
    * @what 一般レビューエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。
-   * @why LLM（Gemini）にバグ、エラー、セキュリティやパフォーマンス観点でのPRレビューと合否判定を指示するため。
+   * @why LLM（Antigravity）にバグ、エラー、セキュリティやパフォーマンス観点でのPRレビューと合否判定を指示するため。
    */
   buildPrompt(context: AgentContext): string {
     const { pr, repoName, repoMapMd } = context;

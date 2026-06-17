@@ -48,15 +48,7 @@ export class PipelineCrawler {
    * @why 各種LLMのCLIパスや監視対象リポジトリの一覧を設定するため。
    */
   constructor(config: AppConfig) {
-    this.config = {
-      ...config,
-      claudeCommand: config.claudeCommand.startsWith('~/')
-        ? config.claudeCommand.replace('~', process.env.HOME ?? '')
-        : config.claudeCommand,
-      geminiCommand: config.geminiCommand.startsWith('~/')
-        ? config.geminiCommand.replace('~', process.env.HOME ?? '')
-        : config.geminiCommand,
-    };
+    this.config = config;
   }
 
   /**

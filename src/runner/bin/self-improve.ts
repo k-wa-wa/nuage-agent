@@ -1,8 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { spawn } from 'child_process';
-import { DEFAULT_CLAUDE_COMMAND, DEFAULT_WORKSPACES_DIR_NAME } from '../../core/index.js';
+import { DEFAULT_WORKSPACES_DIR_NAME, ClaudeRunner } from '../../core/index.js';
 
 const PROMPT_FILE_NAME = 'self_improvement_prompt.md';
 
@@ -89,18 +87,7 @@ ${logListMd}
 `;
 }
 
-/**
- * @what 実行環境の Claude CLI コマンドのフルパスを解決する。
- * @why デフォルトのインストールパス（~/.local/bin/claude）を優先して使用し、存在しない場合はグローバルの claude コマンドを利用できるようにするため。
- */
-function resolveClaudeCommand(): string {
-  const rawPath = DEFAULT_CLAUDE_COMMAND;
-  const resolvedPath = rawPath.startsWith('~/') ? rawPath.replace('~', os.homedir()) : rawPath;
-  if (fs.existsSync(resolvedPath)) {
-    return resolvedPath;
-  }
-  return 'claude';
-}
+// resolveClaudeCommand has been removed in favor of resolveCommandPath(ClaudeRunner.candidates)
 
 /**
  * @what 自己改善フローのエントリーポイントとして、ログ走査、指示ファイル生成、Claude CLI の実行および終了監視の一連の処理を実行する。
@@ -139,36 +126,22 @@ async function main() {
   }
 
   // 4. Claude CLIの起動
-  const claudeCmd = resolveClaudeCommand();
-  console.log(`Claude CLI を起動します: ${claudeCmd}`);
+  console.log('Claude CLI を起動します...');
 
-  const args = [
-    '--dangerously-skip-permissions',
-    '-p',
-    `Please read ${PROMPT_FILE_NAME}, perform the self-improvement task.`,
-  ];
+  const prompt = `Please read ${PROMPT_FILE_NAME}, perform the self-improvement task.`;
+  console.log(`コマンド実行中: Claude CLI [prompt: ${prompt}]`);
 
-  console.log(`コマンド実行中: ${claudeCmd} ${args.join(' ')}`);
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(claudeCmd, args, {
-      stdio: 'inherit',
-      shell: false,
-    });
-
-    child.on('close', (code) => {
-      console.log(`\nClaude CLI が終了コード ${code} で終了しました。`);
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Claude CLI exited with code ${code}`));
-      }
-    });
-
-    child.on('error', (err) => {
-      reject(err);
-    });
+  const runner = new ClaudeRunner();
+  const result = await runner.run({
+    prompt,
+    cwd: rootDir,
+    stdio: 'inherit',
   });
+
+  console.log(`\nClaude CLI が終了コード ${result.code} で終了しました。`);
+  if (result.code !== 0) {
+    throw new Error(`Claude CLI exited with code ${result.code}`);
+  }
 }
 
 main().catch((err: unknown) => {

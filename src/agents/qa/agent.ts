@@ -1,3 +1,4 @@
+import { ClaudeRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
@@ -8,7 +9,7 @@ export class QAAgent implements Agent {
   readonly id = 'qa';
   readonly targetType = 'pr';
   readonly label = 'agent:qa';
-  readonly commandType = 'claude';
+  readonly runner = new ClaudeRunner();
 
   /**
    * @what QAエージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。

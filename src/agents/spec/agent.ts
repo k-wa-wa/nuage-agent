@@ -1,3 +1,4 @@
+import { ClaudeRunner } from '../../core/index.js';
 import type { Agent, AgentContext } from '../types.js';
 
 /**
@@ -8,7 +9,7 @@ export class SpecAgent implements Agent {
   readonly id = 'spec';
   readonly targetType = 'issue';
   readonly label = 'agent:spec';
-  readonly commandType = 'claude';
+  readonly runner = new ClaudeRunner();
 
   /**
    * @what 仕様定義エージェント向けのシステム/ユーザー指示プロンプト文を組み立てます。

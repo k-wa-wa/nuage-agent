@@ -1,7 +1,7 @@
 import * as path from 'path';
 import type { AppConfig } from '../../core/index.js';
 import type { Agent } from '../../agents/index.js';
-import { logger, runCommand } from '../../core/index.js';
+import { logger } from '../../core/index.js';
 
 /**
  * @what CLIの実行を構成するための内部パラメータ。
@@ -36,13 +36,9 @@ function createProgressCallback(repoFolder: string, taskNumber: string, agentId:
  */
 export async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptions): Promise<void> {
   const { agent, prompt, workspacePath, taskNumber } = opts;
-  const isClaude = agent.commandType === 'claude';
-  const cmd = isClaude ? config.claudeCommand : config.geminiCommand;
-  const flags = isClaude ? config.claudeFlags : config.geminiFlags;
 
-  logger.info(`Invoking CLI (${agent.commandType}) for Agent: ${agent.id}...`, 'crawler');
+  logger.info(`Invoking CLI (${agent.runner.id}) for Agent: ${agent.id}...`, 'crawler');
 
-  const runnerArgs = [...flags, '-p', prompt];
   const repoFolder = path.basename(path.dirname(workspacePath));
   const logFilePath = path.resolve(
     config.workspacesDir,
@@ -53,12 +49,10 @@ export async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptio
 
   const onProgress = createProgressCallback(repoFolder, taskNumber, agent.id);
 
-  const result = await runCommand({
-    cmd,
-    args: runnerArgs,
+  const result = await agent.runner.run({
+    prompt,
     cwd: workspacePath,
     logFilePath,
-    silentStdout: true,
     onProgress,
   });
   logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
