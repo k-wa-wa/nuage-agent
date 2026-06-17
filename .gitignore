@@ -2,3 +2,5 @@ node_modules/
 dist/
 workspaces/
 .env
+
+self_improvement_prompt.md

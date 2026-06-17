@@ -174,3 +174,4 @@ bun run dev:runner --once -- --repo-map-dir ./repo-map/sandbox
 
 - 並列実行、ワークスペース隔離、Graceful Shutdown、コード品質制限等の詳細なシステム動作については、[docs/architecture.md](docs/architecture.md) を参照すること。
 - サンドボックス環境での具体的な検証手順については、[docs/sandbox.md](docs/sandbox.md) を参照すること。
+- エージェント実行ログに基づき、プロンプト定義を自己改善するフローの仕組みや使い方については、[docs/self-improvement.md](docs/self-improvement.md) を参照すること。
