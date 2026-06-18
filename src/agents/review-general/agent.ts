@@ -8,7 +8,7 @@ import type { Agent, AgentContext } from '../types.js';
 export class ReviewGeneralAgent implements Agent {
   readonly id = 'review-general';
   readonly targetType = 'pr';
-  readonly label = 'agent:review';
+  readonly label = 'agent:review-general';
   readonly runner = new AntigravityRunner();
 
   /**
@@ -52,13 +52,13 @@ GitHub Pull Request #${pr.number} (タイトル: 「${pr.title}」) の差分レ
 1. **修正が必要な場合 (Failed)**
    指摘事項がある場合、PRにインラインまたは全体コメントで詳細な理由と修正案を投稿し、ラベルを開発フェーズに戻す。
    - コメント投稿: 「gh pr comment ${pr.number} --body "[指摘内容と修正案]"」
-   - ラベル変更: 「gh issue edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review"」
+   - ラベル変更: 「gh issue edit ${pr.number} --add-label "agent:dev" --remove-label "agent:review-general"」
 
 2. **問題ない場合 (Passed)**
-   すべてのチェックに合格した場合、PRに合格判定のレビューコメントを投稿する。
+   すべてのチェックに合格した場合、PRに合格判定のレビューコメントを投稿し、ラベルを次の設計規約レビューフェーズ（agent:review-semantic）に進める。
    - **重要**: 自己PRに対するGitHub API制限（Approve不可エラー）を避けるため、\`--approve\` は使用せず、代わりに \`--comment\` オプションを使用してコメントを投稿すること。
    - レビュー投稿: 「gh pr review ${pr.number} --comment --body "[General Review Result: PASSED]\n一般レビューをパスした。"」
-   (※他のレビューエージェントからも合格判定のコメントが得られた時点で次のフェーズ（agent:qa）へ自動移行するため、ここでは合格判定のコメントを表明するだけでよい)
+   - ラベル変更: 「gh issue edit ${pr.number} --add-label "agent:review-semantic" --remove-label "agent:review-general"」
 `;
   }
 }

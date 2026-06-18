@@ -3,7 +3,8 @@ import { runCommand, logger } from '../core/index.js';
 const PIPELINE_LABELS = [
   { name: 'agent:spec', color: 'fbca04', description: 'Specification phase' },
   { name: 'agent:dev', color: '1d76db', description: 'Development phase' },
-  { name: 'agent:review', color: '0e8a16', description: 'Review phase' },
+  { name: 'agent:review-general', color: '0e8a16', description: 'General review phase' },
+  { name: 'agent:review-semantic', color: 'c2e0c6', description: 'Semantic review phase' },
   { name: 'agent:qa', color: 'b60205', description: 'QA phase' },
   { name: 'agent:triage', color: 'd93f0b', description: 'Triage phase' },
   { name: 'agent:running', color: '5319e7', description: 'Currently running' },

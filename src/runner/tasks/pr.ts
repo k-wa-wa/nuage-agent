@@ -18,7 +18,7 @@ export interface PRTaskOptions {
 
 /**
  * @what 最新のPRラベルを取得し、実行可能か（他で実行中になっていないか等）検証します。
- * @why 分散実行時の二重実行防止（排他制御）を厳密に行うため。ただし、レビューエージェント（review-general, review-semantic）については、それぞれ異なる worktree で並行して実行可能であるため、GitHub 上の 'agent:running' ラベルによる競合スキップをバイパスします（メモリ上の activeTaskKeys にて二重実行は安全に防止されます）。
+ * @why 分散実行時の二重実行防止（排他制御）を厳密に行うため。
  */
 async function performPRLockCheck(
   repo: string,
@@ -30,9 +30,7 @@ async function performPRLockCheck(
     logger.warn(`Skipping PR #${pr.number}: could not fetch fresh.`, 'crawler');
     return true;
   }
-  // @why レビューエージェント同士は並行実行を許容したいため、エージェントIDが 'review-' から始まる場合は 'agent:running' による競合ロック判定を無視します。
-  //      これにより、一般レビューと意味的レビューがスキップされることなく並行して動作します。
-  if (freshPR.labels.includes('agent:running') && !agent.id.startsWith('review-')) {
+  if (freshPR.labels.includes('agent:running')) {
     logger.info(`Skipping PR #${pr.number}: locked by another process.`, 'crawler');
     return true;
   }

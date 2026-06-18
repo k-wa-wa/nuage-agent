@@ -91,8 +91,6 @@ export class PipelineCrawler {
           this.processPRAgent(repo, agent, openPRs);
         }
       }
-
-      await this.postReviewCheck(repo, openPRs);
     }
   }
 
@@ -179,35 +177,6 @@ export class PipelineCrawler {
       const pool = isConflictAgent(agent.id) ? conflictPool : nonConflictPool;
       const repoMapMd = this.getRepoMapMd(repo);
       pool.enqueue(() => runPRAgentTask({ repo, agent, pr, config: this.config, repoMapMd }));
-    }
-  }
-
-  /**
-   * @what 2つのコードレビューエージェント（一般および意味的チェック）によるレビュー合格結果を確認し、状態をQAへと昇格させます。
-   * @why それぞれ非同期で完了するレビューエージェントの出力を統合監視し、双方とも合格を報告した場合のみ次の `agent:qa` ラベルへ安全に移行させるため。
-   */
-  private async postReviewCheck(repo: string, openPRs: GitHubPullRequest[]): Promise<void> {
-    const prs = openPRs.filter((pr) => pr.labels.includes('agent:review'));
-
-    for (const pr of prs) {
-      if (pr.labels.includes('agent:running')) {
-        continue;
-      }
-
-      const comments = await getIssueComments(repo, pr.number);
-      const botUser = await getViewerLogin();
-
-      const hasGeneralPassed = comments.some(
-        (c) => c.user === botUser && c.body.includes('[General Review Result: PASSED]'),
-      );
-      const hasSemanticPassed = comments.some(
-        (c) => c.user === botUser && c.body.includes('[Semantic Review Result: PASSED]'),
-      );
-
-      if (hasGeneralPassed && hasSemanticPassed) {
-        logger.info(`PR #${pr.number} passed all review checks. Elevating to QA phase.`, 'crawler');
-        await updatePullRequestLabels(repo, pr.number, ['agent:qa'], ['agent:review']);
-      }
     }
   }
 

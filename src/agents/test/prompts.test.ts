@@ -67,7 +67,7 @@ test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
       title: 'Fix memory leak',
       body: 'Release resources on clean up.',
       state: 'open',
-      labels: ['agent:review'],
+      labels: ['agent:review-general'],
       branch: 'fix/mem-leak',
       baseBranch: 'main',
       merged: false,
@@ -168,7 +168,9 @@ test('DevAgent (pr) compiles prompt with correct metadata', () => {
   expect(prompt).toMatch(/nuage-cluster/);
   expect(prompt).toMatch(/Pull Request #888/);
   expect(prompt).toMatch(/gh pr checkout 888/);
-  expect(prompt).toMatch(/gh issue edit 888 --add-label "agent:review" --remove-label "agent:dev"/);
+  expect(prompt).toMatch(
+    /gh issue edit 888 --add-label "agent:review-general" --remove-label "agent:dev"/,
+  );
 });
 
 test('QAGeneratorAgent compiles prompt with correct metadata', () => {
