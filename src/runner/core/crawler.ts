@@ -9,9 +9,8 @@ import {
   getIssueComments,
   updatePullRequestLabels,
   getViewerLogin,
-  getRecentIssues,
-  getAllOpenIssues,
-  getAllOpenPRs,
+  getIssues,
+  getPullRequests,
 } from '../../github/index.js';
 import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from '../tasks/pool.js';
 import { runIssueAgentTask } from '../tasks/issue.js';
@@ -76,8 +75,8 @@ export class PipelineCrawler {
     for (const repo of this.config.repositories) {
       logger.info(`Checking repository: ${repo}`, 'crawler');
 
-      const openIssues = await getAllOpenIssues(repo);
-      const openPRs = await getAllOpenPRs(repo);
+      const openIssues = await getIssues(repo, { state: 'open' });
+      const openPRs = await getPullRequests(repo, { state: 'open' });
 
       await this.handleWaitingIssues(repo, openIssues);
       await this.runProactiveQAGenerator(repo);
@@ -216,7 +215,7 @@ export class PipelineCrawler {
     prefix: string,
     intervalMinutes: number,
   ): Promise<boolean> {
-    const recentIssues = await getRecentIssues(repo);
+    const recentIssues = await getIssues(repo, { state: 'all' });
     const qaIssues = recentIssues.filter((issue) => issue.title.startsWith(prefix));
 
     const hasOpenQAIssue = qaIssues.some((issue) => issue.state.toLowerCase() === 'open');

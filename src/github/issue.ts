@@ -1,26 +1,35 @@
 import type { GitHubIssue, GitHubComment } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
-import type { RawGHIssue, RawGHCommentsResponse, RawIssueSummary } from './client.js';
+import type { RawGHIssue, RawGHCommentsResponse } from './client.js';
 import { updateLabels, addComment } from './common.js';
 
+export interface GetIssuesOptions {
+  state?: 'open' | 'closed' | 'all';
+  label?: string;
+  limit?: number;
+}
+
 /**
- * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Issueを取得します。
- * @why エージェントパイプライン用のラベルが付いたIssueを一括取得し、巡回処理の起点とするため。
+ * @what 指定したリポジトリから、条件に応じたGitHub Issueの一覧を取得します。
+ * @why 重複するlist系関数を統合し、コードの保守性を高めるため。
  */
-export async function getIssuesWithLabel(repo: string, label: string): Promise<GitHubIssue[]> {
+export async function getIssues(
+  repo: string,
+  options: GetIssuesOptions = {},
+): Promise<GitHubIssue[]> {
   try {
+    const state = options.state ?? 'open';
+    const limit = options.limit ?? 100;
+
+    const args = ['issue', 'list', '--repo', repo, '--state', state, '--limit', String(limit)];
+    if (options.label) {
+      args.push('--label', options.label);
+    }
+    args.push('--json', 'number,title,body,state,labels,createdAt,updatedAt');
+
     const result = await runCommand({
       cmd: 'gh',
-      args: [
-        'issue',
-        'list',
-        '--repo',
-        repo,
-        '--label',
-        label,
-        '--json',
-        'number,title,body,state,labels,createdAt,updatedAt',
-      ],
+      args,
       cwd: process.cwd(),
     });
     if (result.code !== 0) {
@@ -38,7 +47,7 @@ export async function getIssuesWithLabel(repo: string, label: string): Promise<G
       updatedAt: item.updatedAt,
     }));
   } catch (error) {
-    logger.error(`Failed to get issues with label ${label} from ${repo}`, 'github-client', error);
+    logger.error(`Failed to get issues from ${repo}`, 'github-client', error);
     return [];
   }
 }
@@ -134,64 +143,6 @@ export async function updateIssueLabels(
 }
 
 /**
- * @what 指定したリポジトリから、オープン状態のIssueを最大100件一括で取得します。
- * @why クローラーの定期巡回時のGitHub APIコール数を削減するため。
- */
-export async function getAllOpenIssues(repo: string): Promise<GitHubIssue[]> {
-  try {
-    const result = await runCommand({
-      cmd: 'gh',
-      args: [
-        'issue',
-        'list',
-        '--repo',
-        repo,
-        '--state',
-        'open',
-        '--limit',
-        '100',
-        '--json',
-        'number,title,body,state,labels,createdAt,updatedAt',
-      ],
-      cwd: process.cwd(),
-    });
-    if (result.code !== 0) {
-      throw new Error(result.stderr);
-    }
-    const parsed = JSON.parse(result.stdout) as RawGHIssue[];
-    return parsed.map((item) => ({
-      number: item.number,
-      title: item.title,
-      body: item.body,
-      state: item.state.toLowerCase() as 'open' | 'closed',
-      labels: item.labels.map((l) => l.name),
-      user: '',
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
-  } catch (error) {
-    logger.error(`Failed to get all open issues from ${repo}`, 'github-client', error);
-    return [];
-  }
-}
-
-/**
- * @what GitHub CLI を用いて対象リポジトリの直近オープンIssue一覧を取得します。
- * @why 未割り当てIssueを検出するための最新情報を取得するため。
- */
-export async function getRawIssues(repo: string): Promise<RawIssueSummary[]> {
-  const result = await runCommand({
-    cmd: 'gh',
-    args: ['issue', 'list', '--repo', repo, '--limit', '100', '--json', 'number,title,labels'],
-    cwd: process.cwd(),
-  });
-  if (result.code !== 0) {
-    throw new Error(result.stderr);
-  }
-  return JSON.parse(result.stdout) as RawIssueSummary[];
-}
-
-/**
  * @what 指定したIssueに新しくコメントを追加投稿します。
  * @why 共通の addComment 関数を呼び出し、コードの重複を排除するため。
  */
@@ -201,38 +152,4 @@ export async function addIssueComment(
   body: string,
 ): Promise<void> {
   return addComment(repo, issueNumber, body);
-}
-
-/**
- * @what 指定したリポジトリから、すべての状態（open/closed）の最近のIssueのタイトル、状態、作成日時を取得します。
- * @why QA改善Issueの定期起票チェックにおける重複確認や経過時間検証を行うため。
- */
-export async function getRecentIssues(
-  repo: string,
-): Promise<{ title: string; state: string; createdAt: string }[]> {
-  try {
-    const result = await runCommand({
-      cmd: 'gh',
-      args: [
-        'issue',
-        'list',
-        '--repo',
-        repo,
-        '--state',
-        'all',
-        '--limit',
-        '100',
-        '--json',
-        'title,state,createdAt',
-      ],
-      cwd: process.cwd(),
-    });
-    if (result.code !== 0) {
-      throw new Error(result.stderr);
-    }
-    return JSON.parse(result.stdout) as { title: string; state: string; createdAt: string }[];
-  } catch (error) {
-    logger.error(`Failed to get recent issues from ${repo}`, 'github-client', error);
-    return [];
-  }
 }

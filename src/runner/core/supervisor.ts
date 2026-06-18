@@ -1,28 +1,13 @@
-import type { AppConfig } from '../../core/index.js';
+import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../../core/index.js';
 import { logger } from '../../core/index.js';
 import {
-  getIssuesWithLabel,
+  getIssues,
   updateIssueLabels,
-  getPullRequestsWithLabel,
+  getPullRequests,
   updatePullRequestLabels,
-  getRawIssues,
-  getRawPRs,
   addIssueComment,
   addPullRequestComment,
 } from '../../github/index.js';
-
-interface RawIssueSummary {
-  number: number;
-  title: string;
-  labels: { name: string }[];
-}
-
-interface RawPRSummary {
-  number: number;
-  title: string;
-  body: string;
-  headRefName: string;
-}
 
 /**
  * @what 単一のIssueについて、プレフィックスラベルが無い場合に自動トリアージを行い、コメントを投稿します。
@@ -30,10 +15,10 @@ interface RawPRSummary {
  */
 async function triageSingleIssue(
   repo: string,
-  item: RawIssueSummary,
-  prs: RawPRSummary[],
+  item: GitHubIssue,
+  prs: GitHubPullRequest[],
 ): Promise<void> {
-  const labels = item.labels.map((l) => l.name);
+  const labels = item.labels;
   const hasAgentLabel = labels.some((l) => l.startsWith('agent:'));
   if (hasAgentLabel) {
     return;
@@ -44,8 +29,8 @@ async function triageSingleIssue(
     const branchNameRef = `issue-${item.number}`;
     return (
       issueRefRegex.test(pr.title) ||
-      issueRefRegex.test(pr.body || '') ||
-      pr.headRefName.includes(branchNameRef)
+      issueRefRegex.test(pr.body ?? '') ||
+      pr.branch.includes(branchNameRef)
     );
   });
 
@@ -103,7 +88,7 @@ export class PipelineSupervisor {
    * @why CLIのネットワーク問題や内部無限ループなどによるリソースロックを解除し、自動的に `agent:triage`（手動介入待ち）に回すことでワークフローを復旧するため。
    */
   private async recoverStuckIssues(repo: string): Promise<void> {
-    const runningIssues = await getIssuesWithLabel(repo, 'agent:running');
+    const runningIssues = await getIssues(repo, { label: 'agent:running' });
     const now = new Date().getTime();
 
     for (const issue of runningIssues) {
@@ -120,7 +105,14 @@ export class PipelineSupervisor {
           repo,
           issue.number,
           ['agent:triage'],
-          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
+          [
+            'agent:running',
+            'agent:spec',
+            'agent:dev',
+            'agent:review-general',
+            'agent:review-semantic',
+            'agent:qa',
+          ],
         );
 
         const commentBody = `⚠️ **Supervisor Alert**: このタスクの実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。`;
@@ -139,7 +131,7 @@ export class PipelineSupervisor {
    * @why レビューやQA実行中にハングしたPRタスクを自動で検知して `agent:triage` に移行させ、全体の進捗が停滞するのを防ぐため。
    */
   private async recoverStuckPRs(repo: string): Promise<void> {
-    const runningPRs = await getPullRequestsWithLabel(repo, 'agent:running');
+    const runningPRs = await getPullRequests(repo, { label: 'agent:running' });
     const now = new Date().getTime();
 
     for (const pr of runningPRs) {
@@ -156,7 +148,14 @@ export class PipelineSupervisor {
           repo,
           pr.number,
           ['agent:triage'],
-          ['agent:running', 'agent:spec', 'agent:dev', 'agent:review', 'agent:qa'],
+          [
+            'agent:running',
+            'agent:spec',
+            'agent:dev',
+            'agent:review-general',
+            'agent:review-semantic',
+            'agent:qa',
+          ],
         );
 
         const commentBody = `⚠️ **Supervisor Alert**: このプルリクエストのレビューまたはテスト実行が15分以上停止していたため、自動実行ロックを解除して状態を \`agent:triage\` (人間による調査) に移行しました。`;
@@ -176,10 +175,10 @@ export class PipelineSupervisor {
    */
   private async triageUnlabeledIssues(repo: string): Promise<void> {
     try {
-      const issues = await getRawIssues(repo);
-      let prs: RawPRSummary[] = [];
+      const issues = await getIssues(repo, { state: 'open' });
+      let prs: GitHubPullRequest[] = [];
       try {
-        prs = await getRawPRs(repo);
+        prs = await getPullRequests(repo, { state: 'open' });
       } catch (prError) {
         logger.error(`Failed to fetch pull requests in ${repo}`, 'supervisor', prError);
       }

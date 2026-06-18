@@ -1,6 +1,6 @@
 import type { GitHubPullRequest } from '../core/index.js';
 import { logger, runCommand } from '../core/index.js';
-import type { RawGHPR, RawPRSummary } from './client.js';
+import type { RawGHPR } from './client.js';
 import { updateLabels, addComment } from './common.js';
 
 /**
@@ -51,27 +51,36 @@ export async function getPullRequest(
   }
 }
 
+export interface GetPullRequestsOptions {
+  state?: 'open' | 'closed' | 'merged' | 'all';
+  label?: string;
+  limit?: number;
+}
+
 /**
- * @what 指定したリポジトリから、特定のラベルを持つ全GitHub Pull Requestを取得します。
- * @why PRパイプラインの巡回処理で、ラベル付きPRを一括取得するため。
+ * @what 指定したリポジトリから、条件に応じたGitHub Pull Requestの一覧を取得します。
+ * @why 重複するlist系関数を統合し、コードの保守性を高めるため。
  */
-export async function getPullRequestsWithLabel(
+export async function getPullRequests(
   repo: string,
-  label: string,
+  options: GetPullRequestsOptions = {},
 ): Promise<GitHubPullRequest[]> {
   try {
+    const state = options.state ?? 'open';
+    const limit = options.limit ?? 100;
+
+    const args = ['pr', 'list', '--repo', repo, '--state', state, '--limit', String(limit)];
+    if (options.label) {
+      args.push('--label', options.label);
+    }
+    args.push(
+      '--json',
+      'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
+    );
+
     const result = await runCommand({
       cmd: 'gh',
-      args: [
-        'pr',
-        'list',
-        '--repo',
-        repo,
-        '--label',
-        label,
-        '--json',
-        'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
-      ],
+      args,
       cwd: process.cwd(),
     });
     if (result.code !== 0) {
@@ -91,11 +100,7 @@ export async function getPullRequestsWithLabel(
       updatedAt: item.updatedAt,
     }));
   } catch (error) {
-    logger.error(
-      `Failed to get pull requests with label ${label} from ${repo}`,
-      'github-client',
-      error,
-    );
+    logger.error(`Failed to get pull requests from ${repo}`, 'github-client', error);
     return [];
   }
 }
@@ -111,75 +116,6 @@ export async function updatePullRequestLabels(
   removeLabels: string[],
 ): Promise<void> {
   return updateLabels(repo, prNumber, addLabels, removeLabels);
-}
-
-/**
- * @what 指定したリポジトリから、オープン状態のPull Requestを最大100件一括で取得します。
- * @why クローラーの定期巡回時のGitHub APIコール数を削減するため。
- */
-export async function getAllOpenPRs(repo: string): Promise<GitHubPullRequest[]> {
-  try {
-    const result = await runCommand({
-      cmd: 'gh',
-      args: [
-        'pr',
-        'list',
-        '--repo',
-        repo,
-        '--state',
-        'open',
-        '--limit',
-        '100',
-        '--json',
-        'number,title,body,state,labels,headRefName,baseRefName,createdAt,updatedAt',
-      ],
-      cwd: process.cwd(),
-    });
-    if (result.code !== 0) {
-      throw new Error(result.stderr);
-    }
-    const parsed = JSON.parse(result.stdout) as RawGHPR[];
-    return parsed.map((item) => ({
-      number: item.number,
-      title: item.title,
-      body: item.body,
-      state: item.state.toLowerCase() as 'open' | 'closed',
-      labels: item.labels.map((l) => l.name),
-      branch: item.headRefName,
-      baseBranch: item.baseRefName,
-      merged: item.state.toLowerCase() === 'merged',
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
-  } catch (error) {
-    logger.error(`Failed to get all open PRs from ${repo}`, 'github-client', error);
-    return [];
-  }
-}
-
-/**
- * @what GitHub CLI を用いて対象リポジトリの直近オープンPR一覧を取得します。
- * @why 未割り当てIssueがPRに紐づいているかどうかの検証に用いるため。
- */
-export async function getRawPRs(repo: string): Promise<RawPRSummary[]> {
-  const prResult = await runCommand({
-    cmd: 'gh',
-    args: [
-      'pr',
-      'list',
-      '--repo',
-      repo,
-      '--limit',
-      '100',
-      '--json',
-      'number,title,body,headRefName',
-    ],
-    cwd: process.cwd(),
-  });
-  if (prResult.code === 0) {
-    return JSON.parse(prResult.stdout) as RawPRSummary[];
-  }
-  throw new Error(prResult.stderr);
 }
 
 /**
