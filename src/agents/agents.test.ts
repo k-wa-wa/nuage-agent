@@ -1,6 +1,6 @@
 import { test, expect } from 'bun:test';
-import type { AgentContext } from '../index.js';
-import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent, QAGeneratorAgent } from '../index.js';
+import type { AgentContext } from './index.js';
+import { SpecAgent, DevAgent, ReviewGeneralAgent, QAAgent, QAGeneratorAgent } from './index.js';
 
 test('SpecAgent compiles prompt with correct metadata', () => {
   const agent = new SpecAgent();
