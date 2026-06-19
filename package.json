@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Automated development pipeline using LLM CLIs and GitHub Issues.",
   "scripts": {
-    "dev:runner": "bun run src/runner/bin/run.ts",
+    "dev": "bun run src/runner/bin/run.ts",
     "build": "bun --bun tsc",
     "build:ci": "bun run build && bun run lint && bun run format:check",
     "lint": "bun --bun eslint \"src/**/*.ts\"",
@@ -13,8 +13,8 @@
     "format": "bun --bun prettier --write \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
     "format:check": "bun --bun prettier --check \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
     "test": "bun test",
-    "sandbox:setup": "bash scripts/setup-sandbox.sh",
-    "sandbox:run": "bun run dev:runner -- --repo-map-dir ./repo-map/sandbox --auto-merge",
+    "dev:sandbox": "bun run dev -- --repo-map-dir ./repo-map/sandbox --auto-merge",
+    "dev:nuage": "bun run dev -- --repo-map-dir ./repo-map/nuage",
     "labels:create": "bun run src/runner/bin/create-labels.ts",
     "self-improve": "bun run src/runner/bin/self-improve.ts",
     "self-improve:dry": "bun run src/runner/bin/self-improve.ts --dry-run"
