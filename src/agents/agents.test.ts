@@ -29,6 +29,9 @@ test('SpecAgent compiles prompt with correct metadata', () => {
   expect(prompt).toMatch(/gh issue view 123 --comments/);
   expect(prompt).toMatch(/gh issue edit 123/);
   expect(prompt).toMatch(/gh issue create/);
+  expect(prompt).toMatch(/完了基準チェックリスト/);
+  expect(prompt).toMatch(/--body-file/);
+  expect(prompt).toMatch(/rm/);
 });
 
 test('DevAgent (issue) compiles prompt with correct metadata', () => {
@@ -55,6 +58,8 @@ test('DevAgent (issue) compiles prompt with correct metadata', () => {
   expect(prompt).toMatch(/Issue #456/);
   expect(prompt).toMatch(/gh issue view 456/);
   expect(prompt).toMatch(/feature\/issue-456/);
+  expect(prompt).toMatch(/完了基準チェックリスト/);
+  expect(prompt).toMatch(/pr_body\.md/);
 });
 
 test('ReviewGeneralAgent compiles prompt with correct metadata', () => {
@@ -111,6 +116,8 @@ test('QAAgent compiles prompt with correct metadata (manual merge default)', () 
   expect(prompt).toMatch(/gh pr checkout 999/);
   expect(prompt).toMatch(/gh issue edit 999 --remove-label "agent:qa"/);
   expect(prompt).toMatch(/手動でのマージを求める/);
+  expect(prompt).toMatch(/完了基準チェックリストの確認/);
+  expect(prompt).toMatch(/自己修復/);
 });
 
 test('QAAgent compiles prompt with correct metadata and auto-merge instructions', () => {
@@ -141,6 +148,8 @@ test('QAAgent compiles prompt with correct metadata and auto-merge instructions'
   expect(prompt).toMatch(/gh pr checkout 999/);
   expect(prompt).toMatch(/gh pr merge 999 --merge --delete-branch/);
   expect(prompt).toMatch(/自動マージを実行します/);
+  expect(prompt).toMatch(/完了基準チェックリストの確認/);
+  expect(prompt).toMatch(/自己修復/);
 });
 
 test('DevAgent (pr) compiles prompt with correct metadata', () => {
@@ -171,6 +180,8 @@ test('DevAgent (pr) compiles prompt with correct metadata', () => {
   expect(prompt).toMatch(
     /gh issue edit 888 --add-label "agent:review-general" --remove-label "agent:dev"/,
   );
+  expect(prompt).toMatch(/完了チェックリスト/);
+  expect(prompt).toMatch(/pr_body\.md/);
 });
 
 test('QAGeneratorAgent compiles prompt with correct metadata', () => {
