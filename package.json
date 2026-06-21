@@ -12,7 +12,7 @@
     "lint:fix": "bun --bun eslint \"src/**/*.ts\" --fix",
     "format": "bun --bun prettier --write \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
     "format:check": "bun --bun prettier --check \"src/**/*.{ts,js,json,md}\" README.md docs/**/*.md repo-map/**/*.yaml",
-    "test": "bun test",
+    "test": "bun test src",
     "dev:sandbox": "bun run dev -- --repo-map-dir ./repo-map/sandbox --auto-merge",
     "dev:nuage": "bun run dev -- --repo-map-dir ./repo-map/nuage",
     "self-improve": "bun run src/runner/bin/self-improve.ts",

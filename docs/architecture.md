@@ -79,4 +79,4 @@
 
 ### モジュール構造
 
-クローラー (`src/runner/crawler.ts`) はディスパッチに専念し、実際の実行詳細は `src/runner/task-runner.ts` へ委譲されている。共通の GitHub 操作は `src/github/` パッケージ（`client.ts`, `issue.ts`, `pr.ts`, `label.ts`）に分割・集約し、ビジネスロジックとデータアクセス層、インフラ制御層を疎結合化している。
+クローラー (`src/runner/core/crawler.ts`) はディスパッチに専念し、実際の実行詳細は `src/runner/tasks/` 配下のタスクファイル（`issue.ts`, `pr.ts` など）へ委譲されている。共通の GitHub 操作は `src/github/` パッケージ（`client.ts`, `issue.ts`, `pr.ts`, `label.ts`）に分割・集約し、ビジネスロジックとデータアクセス層、インフラ制御層を疎結合化している。

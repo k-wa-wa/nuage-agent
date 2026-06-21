@@ -25,13 +25,13 @@ export class SpecAgent implements Agent {
 
 1. **仕様の明確化（壁打ちループ）**
    要件に曖昧な点や確認したい事項がある場合、以下の両方のコマンドを実行してユーザーに質問し、回答を待つこと。
-   - 質問の投稿: 「gh issue comment ${issueNumber} --body "[仕様確認のための質問]... \n\n(※内容を確認のうえ、コメントで返信するか、\`agent:wait\` ラベルを剥がしてください。)"」
+   - 質問の投稿: 「gh issue comment ${issueNumber} --body "[仕様確認のための質問]... \n\n(※内容を確認のうえ、コメントで返信するか、\`agent:wait\` ラベルを剥がすこと。)"」
    - 保留ラベルの付与: 「gh issue edit ${issueNumber} --add-label "agent:wait"」
 
 2. **PRD & 受け入れ基準 (AC) のドラフト提示**
    必要な要件が揃った場合、仕様書（PRD）と受け入れ基準（AC）のドラフトをMarkdown形式で作成し、以下の両方のコマンドを実行してユーザーの承認を求めること。
-   **【重要】受け入れ基準（AC）には、実装完了を客観的に検証するための「完了基準チェックリスト」を必ず \`- [ ]\` 形式（GitHub Markdown）で含めてください。**
-   - ドラフト提示の投稿: 「gh issue comment ${issueNumber} --body "[PRDドラフト]... \n\n(※内容に問題がなければ『Approve』や『OK』等と返信するか、\`agent:wait\` ラベルを剥がしてください。)"」
+   **【重要】受け入れ基準（AC）には、実装完了を客観的に検証するための「完了基準チェックリスト」を必ず \`- [ ]\` 形式（GitHub Markdown）で含めること。**
+   - ドラフト提示の投稿: 「gh issue comment ${issueNumber} --body "[PRDドラフト]... \n\n(※内容に問題がなければ『Approve』や『OK』等と返信するか、\`agent:wait\` ラベルを剥がすこと。)"」
    - 保留ラベルの付与: 「gh issue edit ${issueNumber} --add-label "agent:wait"」
 
 3. **承認の検知と開発フェーズへの引き渡し**
@@ -39,7 +39,7 @@ export class SpecAgent implements Agent {
 
    ### パターンA: 通常規模のタスク（分割が不要な場合）
    仕様定義フェーズを完了させ、開発エージェントへ引き渡す。
-   - 最終決定した仕様（PRDとAC）で親Issueの本文（Description）を更新する。この際、**必ず本文内に \`- [ ]\` 形式の完了基準チェックリストが含まれていることを保証すること**。また、長文によるシェルエスケープのエラーを防ぐため、必ず一時ファイルを用いて更新してください。
+   - 最終決定した仕様（PRDとAC）で親Issueの本文（Description）を更新する。この際、**必ず本文内に \`- [ ]\` 形式の完了基準チェックリストが含まれていることを保証すること**。また、長文によるシェルエスケープのエラーを防ぐため、必ず一時ファイルを用いて更新すること。
      「echo "[最終決定したPRDおよび - [ ] 形式の完了基準チェックリストの内容]" > issue_body.md && gh issue edit ${issueNumber} --body-file issue_body.md && rm issue_body.md」
    - 担当ラベルを「agent:dev」に変更し、「agent:spec」および「agent:wait」を剥がす:
      「gh issue edit ${issueNumber} --add-label "agent:dev" --remove-label "agent:spec" --remove-label "agent:wait"」
