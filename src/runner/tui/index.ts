@@ -26,6 +26,7 @@ export interface TuiState {
   lastCrawlTime: Date | null;
   tasks: Map<string, TaskState>;
   logs: string[];
+  errorLogs: string[];
   startTime: Date;
 }
 
@@ -35,6 +36,7 @@ export const tuiState: TuiState = {
   lastCrawlTime: null,
   tasks: new Map<string, TaskState>(),
   logs: [],
+  errorLogs: [],
   startTime: new Date(),
 };
 
@@ -45,6 +47,7 @@ let headerText: TextRenderable | null = null;
 let poolsText: TextRenderable | null = null;
 let tasksText: TextRenderable | null = null;
 let logsText: TextRenderable | null = null;
+let errorLogsText: TextRenderable | null = null;
 let drawInterval: NodeJS.Timeout | null = null;
 
 // ─── Layout Building ──────────────────────────────────────────────────────────
@@ -171,6 +174,39 @@ function buildLogsPanel(ctx: CliRenderer): {
   return { scroll, text };
 }
 
+/**
+ * @what エラーログをリアルタイムで出力し、自動スクロールが可能なエラーログ専用パネルを作成します。
+ * @why 発生したエラーのみを蓄積表示して視認性を高めるため。
+ */
+function buildErrorLogsPanel(ctx: CliRenderer): {
+  scroll: ScrollBoxRenderable;
+  text: TextRenderable;
+} {
+  const scroll = new ScrollBoxRenderable(ctx, {
+    width: '100%',
+    height: 8,
+    border: true,
+    borderColor: '#ff4a4a',
+    backgroundColor: BG_PANEL,
+    title: ' ✘  Error Logs ',
+    titleColor: '#ff4a4a',
+    stickyScroll: true,
+    stickyStart: 'bottom',
+    scrollY: true,
+    scrollX: false,
+  });
+  ctx.root.add(scroll);
+
+  const text = new TextRenderable(ctx, {
+    width: '100%',
+    fg: '#ff7b72',
+    bg: BG_PANEL,
+    wrapMode: 'word',
+  });
+  scroll.add(text);
+  return { scroll, text };
+}
+
 // ─── Log Hook ─────────────────────────────────────────────────────────────────
 
 const TUI_LOG_MAX_LINE = 200;
@@ -188,6 +224,13 @@ function setupLoggerHook(): void {
     if (tuiState.logs.length > TUI_LOG_MAX_LINES) {
       tuiState.logs.shift();
     }
+
+    if (level === 'error') {
+      tuiState.errorLogs.push(line);
+      if (tuiState.errorLogs.length > TUI_LOG_MAX_LINES) {
+        tuiState.errorLogs.shift();
+      }
+    }
   };
   logger.setLogListener(listener);
 }
@@ -202,19 +245,26 @@ function draw(): void {
   if (!renderer) {
     return;
   }
-  if (headerText) {
-    headerText.content = buildHeaderText(tuiState);
+  try {
+    if (headerText) {
+      headerText.content = buildHeaderText(tuiState);
+    }
+    if (poolsText) {
+      poolsText.content = buildPoolsText();
+    }
+    if (tasksText) {
+      tasksText.content = buildTasksText(tuiState);
+    }
+    if (logsText) {
+      logsText.content = tuiState.logs.join('\n');
+    }
+    if (errorLogsText) {
+      errorLogsText.content = tuiState.errorLogs.join('\n');
+    }
+    renderer.requestRender();
+  } catch (_error) {
+    // Prevent drawing exceptions from crashing the runner process
   }
-  if (poolsText) {
-    poolsText.content = buildPoolsText();
-  }
-  if (tasksText) {
-    tasksText.content = buildTasksText(tuiState);
-  }
-  if (logsText) {
-    logsText.content = tuiState.logs.join('\n');
-  }
-  renderer.requestRender();
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -242,6 +292,9 @@ export async function initTui(): Promise<void> {
   const logsPanel = buildLogsPanel(renderer);
   logsText = logsPanel.text;
 
+  const errorLogsPanel = buildErrorLogsPanel(renderer);
+  errorLogsText = errorLogsPanel.text;
+
   setupLoggerHook();
   renderer.start();
 
@@ -266,6 +319,7 @@ export function stopTui(): void {
     poolsText = null;
     tasksText = null;
     logsText = null;
+    errorLogsText = null;
   }
 }
 

@@ -15,7 +15,6 @@
     "test": "bun test",
     "dev:sandbox": "bun run dev -- --repo-map-dir ./repo-map/sandbox --auto-merge",
     "dev:nuage": "bun run dev -- --repo-map-dir ./repo-map/nuage",
-    "labels:create": "bun run src/runner/bin/create-labels.ts",
     "self-improve": "bun run src/runner/bin/self-improve.ts",
     "self-improve:dry": "bun run src/runner/bin/self-improve.ts --dry-run"
   },
