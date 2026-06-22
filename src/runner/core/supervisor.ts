@@ -1,5 +1,5 @@
 import type { AppConfig, GitHubIssue, GitHubPullRequest } from '../../core/index.js';
-import { logger } from '../../core/index.js';
+import { logger, runCommand } from '../../core/index.js';
 import {
   getIssues,
   updateIssueLabels,
@@ -7,6 +7,7 @@ import {
   updatePullRequestLabels,
   addIssueComment,
   addPullRequestComment,
+  getViewerLogin,
 } from '../../github/index.js';
 
 /**
@@ -76,6 +77,7 @@ export class PipelineSupervisor {
         await this.recoverStuckIssues(repo);
         await this.recoverStuckPRs(repo);
         await this.triageUnlabeledIssues(repo);
+        await this.handleHumanReviews(repo);
       }
     } catch (error) {
       logger.error('Error during Supervisor checks', 'supervisor', error);
@@ -189,5 +191,111 @@ export class PipelineSupervisor {
     } catch (error) {
       logger.error(`Failed to triage unlabeled issues in ${repo}`, 'supervisor', error);
     }
+  }
+
+  /**
+   * @what レビュー・QAフェーズにあるPRにおいて、人間からの CHANGES_REQUESTED が提出されているかを検知し、自動で agent:dev に差し戻します。
+   * @why 人間のレビュー却下を無視してBotが勝手に処理を進めるのを防ぎ、自動で修正を依頼するため。
+   */
+  private async handleHumanReviews(repo: string): Promise<void> {
+    logger.debug(`Checking human reviews for ${repo}...`, 'supervisor');
+    try {
+      const openPRs = await getPullRequests(repo, { state: 'open' });
+      // レビューまたはQAのラベルがついているPRを対象にする
+      const reviewLabels = ['agent:review-general', 'agent:review-semantic', 'agent:qa'];
+      const targetPRs = openPRs.filter(
+        (pr) =>
+          pr.labels.some((l) => reviewLabels.includes(l)) && !pr.labels.includes('agent:running'),
+      );
+
+      if (targetPRs.length === 0) {
+        return;
+      }
+
+      // Botのログインユーザー名を取得
+      const botUser = await getViewerLogin();
+
+      for (const pr of targetPRs) {
+        const hasRejected = await this.checkHumanChangesRequested(repo, pr.number, botUser);
+        if (hasRejected) {
+          logger.warn(
+            `PR #${pr.number} in ${repo} has pending human CHANGES_REQUESTED review. Returning to agent:dev.`,
+            'supervisor',
+          );
+
+          // 現在ついているレビュー系のラベルを特定
+          const currentReviewLabels = pr.labels.filter((l) => reviewLabels.includes(l));
+
+          // ラベルを agent:dev に変更し、古いレビューラベルを削除
+          await updatePullRequestLabels(repo, pr.number, ['agent:dev'], currentReviewLabels);
+
+          const commentBody = `🤖 **Supervisor**: 人間によるレビュー却下（CHANGES_REQUESTED）が検知されました。修正を行うため、状態を開発フェーズ (\`agent:dev\`) に差し戻します。指摘コメントを確認し対応してください。`;
+          try {
+            await addPullRequestComment(repo, pr.number, commentBody);
+          } catch (commentError) {
+            logger.error(
+              `Failed to post review redirect comment on PR #${pr.number}`,
+              'supervisor',
+              commentError,
+            );
+          }
+        }
+      }
+    } catch (error) {
+      logger.error(`Failed to handle human reviews in ${repo}`, 'supervisor', error);
+    }
+  }
+
+  /**
+   * @what 最新コミットのコミット日時より後に、Bot以外のユーザーによる CHANGES_REQUESTED レビューがあるかを判定します。
+   * @why レビューが却下された場合に自動的に検知し、開発フェーズ（agent:dev）へ戻す判断を下すため。
+   */
+  private async checkHumanChangesRequested(
+    repo: string,
+    prNumber: number,
+    botUser: string,
+  ): Promise<boolean> {
+    try {
+      const result = await runCommand({
+        cmd: 'gh',
+        args: ['pr', 'view', String(prNumber), '--repo', repo, '--json', 'reviews,commits'],
+        cwd: process.cwd(),
+      });
+      if (result.code !== 0) {
+        logger.error(
+          `Failed to get PR #${prNumber} details for supervisor: ${result.stderr}`,
+          'supervisor',
+        );
+        return false;
+      }
+      const details = JSON.parse(result.stdout) as {
+        commits: { committedDate: string; oid: string }[];
+        reviews: { author: { login: string }; state: string; submittedAt: string }[];
+      };
+
+      if (details.commits.length === 0) {
+        return false;
+      }
+
+      // 最新コミットのコミット日時
+      const lastCommit = details.commits[details.commits.length - 1];
+      const lastCommitDate = new Date(lastCommit.committedDate).getTime();
+
+      // Bot以外のユーザーによる CHANGES_REQUESTED レビューを探す
+      const humanReviews = details.reviews.filter(
+        (r) => r.author.login !== botUser && r.state === 'CHANGES_REQUESTED',
+      );
+
+      for (const review of humanReviews) {
+        const reviewDate = new Date(review.submittedAt).getTime();
+        // 最新コミット日時以降に提出された CHANGES_REQUESTED があるか
+        if (reviewDate >= lastCommitDate) {
+          return true;
+        }
+      }
+    } catch (error) {
+      logger.error(`Error in checkHumanChangesRequested for PR #${prNumber}`, 'supervisor', error);
+    }
+    return false;
   }
 }

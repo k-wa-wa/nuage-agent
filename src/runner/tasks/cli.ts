@@ -56,4 +56,13 @@ export async function executeAgentCLI(config: AppConfig, opts: CLIExecutionOptio
     onProgress,
   });
   logger.debug(`Agent ${agent.id} CLI completed with exit code: ${result.code}`, 'crawler');
+  if (result.code !== 0) {
+    const stdoutTail = result.stdout ? result.stdout.slice(-1000) : '';
+    const stderrTail = result.stderr ? result.stderr.slice(-1000) : '';
+    throw new Error(
+      `Agent CLI exited with non-zero code ${result.code}.\n` +
+        `[Stdout Tail]: ${stdoutTail}\n` +
+        `[Stderr Tail]: ${stderrTail}`,
+    );
+  }
 }

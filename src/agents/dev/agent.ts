@@ -110,9 +110,11 @@ ${EFFICIENCY_PRINCIPLES}
 ## タスク
 GitHub Pull Request #${pr.number} (タイトル: 「${pr.title}」) のレビュー指摘に対応し、コードを修正する。
 
-最初に必ず以下のコマンドを実行して、PRのレビューコメントや指摘内容を確認すること。
+最初に必ず以下のコマンドを実行して、PRのタイムラインコメント、レビュー状態、およびインラインコメント（ファイル差分に対する指摘）のすべてを確認すること。
 
-コマンド: 「gh api repos/${repoName}/issues/${pr.number}/comments --jq '.[] | {user: .user.login, body: .body}'」
+コマンド1（タイムラインコメント）: 「gh api repos/${repoName}/issues/${pr.number}/comments --jq '.[] | {user: .user.login, body: .body}'」
+コマンド2（レビューの合否状態）: 「gh api repos/${repoName}/pulls/${pr.number}/reviews --jq '.[] | {user: .user.login, state: .state, body: .body}'」
+コマンド3（インライン指摘コメント）: 「gh api repos/${repoName}/pulls/${pr.number}/comments --jq '.[] | {user: .user.login, path: .path, line: .line, body: .body}'」
 
 ## 開発・送信プロセス
 

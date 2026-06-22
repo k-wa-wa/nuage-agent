@@ -16,6 +16,7 @@ import { conflictPool, nonConflictPool, isTaskActive, addTaskActive } from '../t
 import { runIssueAgentTask } from '../tasks/issue.js';
 import { runPRAgentTask } from '../tasks/pr.js';
 import { runQAGeneratorTask } from '../tasks/qa.js';
+import { isTaskInCoolDown } from '../tasks/task-state.js';
 
 /**
  * @what エージェントが並行プールで競合を引き起こすかどうかを判定します。
@@ -140,6 +141,14 @@ export class PipelineCrawler {
       }
 
       const key = `${repo}#${issue.number}-${agent.id}`;
+      if (isTaskInCoolDown(key)) {
+        logger.info(
+          `Skipping Agent: ${agent.id} on Issue #${issue.number} due to cool down.`,
+          'crawler',
+        );
+        continue;
+      }
+
       if (isTaskActive(key)) {
         logger.debug(`Task ${key} is already active/queued. Skipping.`, 'crawler');
         continue;
@@ -166,6 +175,11 @@ export class PipelineCrawler {
       }
 
       const key = `${repo}#${pr.number}-${agent.id}`;
+      if (isTaskInCoolDown(key)) {
+        logger.info(`Skipping Agent: ${agent.id} on PR #${pr.number} due to cool down.`, 'crawler');
+        continue;
+      }
+
       if (isTaskActive(key)) {
         logger.debug(`Task ${key} is already active/queued. Skipping.`, 'crawler');
         continue;
